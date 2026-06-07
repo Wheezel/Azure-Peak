@@ -45,47 +45,63 @@ single ingredient majors in — it needs a 2+2 mix (covered below).
 
 ---
 
-# 🪙 CHEAPEST RECIPE — MASTER TABLE
+# 🪙 MASTER RECIPE TABLE
 
-*Brew 2–4 of the listed ingredient (pure pot) unless it says "mix".*
+**How to read it:** brew **2× of any MAJOR ingredient** (pure pot) to guarantee that
+potion. The **🪙 Cheapest** column gives the cheapest viable brew, avoiding fire
+essentia and precious (gold/silver) dust wherever possible — some use a **medium
+combo** (two different mediums whose own majors point elsewhere, so the shared
+medium wins at 8 pts vs 6/6). MAJOR = 3 pts · MEDIUM = 2 · MINOR = 1.
 
-| Potion | Cheapest recipe | Source | Cost | Gate |
-|---|---|---|---|---|
-| **Elixir of Health** | 2× **urtica** *(or valeriana)* | forage (common herb) | free | Apprentice |
-| **Health (Strong)** | 2× **calendula** *(or viscera)* | forage / butcher | free | Journeyman |
-| **Elixir of Mana** | 2× **bonemeal** | butcher → grind tail bone | free | Apprentice |
-| **Mana (Strong)** | 2× **gold dust** | grind gold *(see note)* | ~precious | Journeyman |
-| **Elixir of Stamina** | 2× **hypericum** | forage | free | Apprentice |
-| **Stamina (Strong)** | 2× **seed dust** | grind any seeds | ~free | Journeyman |
-| **Antidote** | 2× **coal dust** | grind coal | ~1 ea | Apprentice |
-| **Antidote (Strong)** | 2× **tail bone** | butcher animal | free | Journeyman |
-| **Elixir of Restoration** | **2× silver dust + 2× gold dust** *(mix)* | grind precious | expensive | Expert |
-| **Keen Mind** (INT) | 2× **water essentia** | grind fish | free | Expert |
-| **Keen Eye** (PER) | 2× **mentha** | forage | free | Expert |
-| **Enduring Fortitude** (WIL) | 2× **iron dust** | grind iron | ~3 ea | Expert |
-| **Stone Flesh** (CON) | 2× **earth essentia** *(or salvia)* | grind cheap ore / forage | ~1 ea | Expert |
-| **Fleet Foot** (SPD) | 2× **air essentia** *(or euphrasia)* | grind / forage | ~4 | Expert |
-| **Seven Clovers** (LCK) | 2× **artemisia** *(or rosa)* | forage | free | Expert |
-| **Mountain Muscles** (STR) | 2× **fire essentia** *(or troll horn)* | grind fyritius / butcher troll | see note | Expert |
-| **Fire Warding** | 2× **solar dust** | grind sunflower | grow | Master |
-| **Poison (Berry)** | 2× **matricaria** | forage | free | Journeyman |
-| **Poison (Doom)** | 2× **atropa** | forage (rare herb) | ~10 | Expert |
-| **Stamina Poison** | 2× **taraxacum** *(or sinew)* | forage / butcher | free | Journeyman |
-| **Stamina Poison (Strong)** | 2× **paris** | forage (uncommon herb) | ~6 | Expert |
-| **Sleep Poison** | 2× **briar essence** *(or sleeping powder)* | grind rosa petals / forage zizo-bane | free | Master |
+| Potion (effect) | Gate | 🪙 Cheapest brew | MAJOR (3) | MEDIUM (2) | MINOR (1) |
+|---|---|---|---|---|---|
+| **Elixir of Health** *(heal brute/fire)* | Appr | **2× urtica** (free herb) | symphitum, urtica, valeriana | viscera, taraxacum, tail bone | sinew, calendula, artemisia |
+| **Health (Strong)** | Jour | **2× calendula** or viscera (free) | viscera, calendula | — | silver dust |
+| **Elixir of Mana** *(+energy)* | Appr | **2× bonemeal** (free butcher) | bonemeal, manabloom powder | berry powder | sleeping powder |
+| **Mana (Strong)** | Jour | **2 hypericum + 2 water essentia** (free) | magic dust, gold dust | water essentia, raw essentia, feau dust, mineral dust, hypericum | purified salts, berry powder, manabloom powder |
+| **Elixir of Stamina** | Appr | **2× hypericum** (free herb) | hypericum | seed dust, air essentia, westleach dust, benedictus | mentha, urtica |
+| **Stamina (Strong)** | Jour | **2× seed dust** (~free) | seed dust, ozium, benedictus | — | — |
+| **Antidote** *(cure poison)* | Appr | **2× purified salts** (no metal) | coal dust, purified salts | briar essence, rosa | viscera, bonemeal, symphitum, taraxacum, hypericum |
+| **Antidote (Strong)** | Jour | **2× tail bone** (free butcher) | silver dust, tail bone | purified salts | seed dust, feau dust |
+| **Elixir of Restoration** *(heal+energy)* | Exp | **1 silver + 1 gold + 1 rosa** *(only way)* | — *(none)* | silver dust, gold dust | rosa |
+| **Keen Mind** *(INT +3)* | Exp | **2× water essentia** (free fish) | water essentia, raw essentia | mentha, solar dust, manabloom powder | air essentia, ozium, euphrasia, benedictus, infernal dust |
+| **Keen Eye** *(PER +3)* | Exp | **2× mentha** (free herb) | westleach dust, mentha | bonemeal, matricaria | water essentia, raw essentia, gold dust, solar dust |
+| **Enduring Fortitude** *(WIL +3)* | Exp | **2 calendula + 2 sinew** (free) | iron dust | coal dust, magic dust, sinew, earth essentia, calendula | swampweed dust, troll horn, salvia |
+| **Stone Flesh** *(CON +3)* | Exp | **2× salvia** (free herb) | earth essentia, salvia | fire essentia, iron dust, troll horn | magic dust, tail bone |
+| **Fleet Foot** *(SPD +3)* | Exp | **2× euphrasia** (free herb) | air essentia, feau dust, euphrasia | urtica, artemisia, valeriana | westleach dust |
+| **Seven Clovers** *(LCK +3)* | Exp | **2× artemisia** or rosa (free) | artemisia, rosa | sleeping powder, ozium | briar essence |
+| **Mountain Muscles** *(STR +3)* | Exp | **2× troll horn** (free butcher) | fire essentia, troll horn | salvia | coal dust, iron dust, earth essentia |
+| **Fire Warding** *(15-min fire immunity)* | Mast | **2× solar dust** (grind sunflower) | infernal dust, solar dust | — | fire essentia |
+| **Poison (Berry)** *(incap)* | Jour | **2× matricaria** (free herb) | swampweed dust, berry powder, matricaria | atropa, paris | — |
+| **Poison (Doom)** *(lethal)* | Exp | **2× atropa** (rare herb) | mineral dust, atropa | — | matricaria |
+| **Stamina Poison** *(drain)* | Jour | **2× taraxacum** or sinew (free) | sinew, taraxacum | symphitum, euphrasia | atropa, paris, valeriana |
+| **Stamina Poison (Strong)** | Exp | **2× paris** (uncommon herb) | paris | swampweed dust, infernal dust | mineral dust |
+| **Sleep Poison** *(sedate)* | Mast | **2× briar essence** or sleeping powder | sleeping powder, briar essence | — | — |
 
-**Notes on the few non-free ones:**
-- **Strong Mana** has no cheap major — gold dust (≈15) or magic dust (≈8) are the
-  options. Magic dust is **crafted** from 1 each of water+fire+air+earth dust on a
-  table, so if you're already grinding cheap essentia you can make it for near-free
-  in effort, just slowly.
-- **Restoration** is the only potion with **no major ingredient at all**. Use **2
-  silver dust + 2 gold dust**: that scores Restoration 8 (each is medium) vs Strong
-  Antidote 6 and Strong Mana 6, so Restoration wins. It's intentionally the premium
-  heal — there is no budget version.
-- **Mountain Muscles (STR)** needs **fire essentia** or a **troll horn**. Fire
-  essentia drops as a **bonus 25% of the time when you grind coal or iron**, so
-  stockpile it passively while making Antidote/Fortitude, then brew STR for free.
+**The four "medium-combo / free" tricks** (avoid fire essentia & gold/silver dust):
+- **Mana (Strong)** = 2 hypericum + 2 water essentia → big-mana **8** vs Stamina 6 / Keen Mind 6. *(or just 2× gold/magic dust if you have them)*
+- **Enduring Fortitude** = 2 calendula + 2 sinew → Fortitude **8** vs Strong Health 6 / Stamina Poison 6. *(replaces iron dust)*
+- **Antidote** = 2 purified salts (grind salt). *Avoid 2 rosa + 2 briar essence — it ties LCK and brews unreliably.* Coal dust (~1) also works.
+- **Mountain Muscles** = 2 troll horn (butcher a troll) → STR **6** vs CON 4. *(the only non-fire-essentia route; salvia can't win, its CON major dominates)*
+
+**The one unavoidable cost — Restoration:** only silver dust (med), gold dust (med),
+and rosa (minor) touch it, so you **must** use both metals. Cheapest is **1 silver +
+1 gold + 1 rosa = exactly 5 pts** (beats Strong Antidote / Strong Mana / Seven Clovers
+at 3 each). No herb-only version exists.
+
+## Fixed-recipe specials (table craft, not the cauldron point system)
+
+| Item | Effect | Ingredients (exact) | Gate |
+|---|---|---|---|
+| **Quicksilver Poultice** | cures lesser werewolves / vampires | 1 bloodied fyritius + 45u blessed water + 1 cloth + 1 silver dust | Master (craftdiff 4) |
+| **Absolving Silver** *(lux variant)* | stronger cure poultice | same as above | Transmutation (craftdiff 0) |
+| **Rot Cure Potion** | cures zombie/deadite infection (10u ≈ 2 people) | 1 alchemical bottle + 1 fyritius + 2 filled heartblood vials + 2 viscera | Master (craftdiff 5) |
+| **Pure essentia** (magic dust) | crafting reagent | 1 each water + fire + air + earth essentia | on a table |
+| **Feau dust** | crafting reagent | 2 iron dust + 1 gold dust | on a table |
+
+*Bloodied fyritius:* grow a fyritius, then **hit a bleeding transformed werewolf or
+any bleeding vampire with it** (5-sec channel) to soak their cursed blood. Inquisitors
+can drench it from a cursed-blood indexer instead.
 
 ---
 
