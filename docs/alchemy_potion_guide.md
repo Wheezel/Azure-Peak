@@ -1,286 +1,224 @@
-# Alchemy & Potion Guide — Every Brew in the Game
+# Alchemy & Potion Guide — Cheapest Recipe for Every Brew
 
-*A complete reference for every alchemical product you can make: how the cauldron
-works, exactly which ingredients to throw in, where those ingredients come from,
-and what each potion does mechanically. Values are pulled straight from the code
-(`code/modules/roguetown/roguecrafting/alchemy/`).*
-
----
-
-## How alchemy actually works
-
-There are two stations, used in sequence:
-
-### 1. Mortar & Pestle — make your dusts/powders
-Put a raw item in the mortar, click with the pestle. This **grinds** raw materials
-(ores, gems, herbs, butchered parts, plants) into the **dusts and powders** that
-the cauldron actually wants. Middle-click prioritizes juicing. XP per grind scales
-with your INT (`STAINT`). Many grinds have a **bonus-output roll** for a second
-item. (`mortarpestle.dm`, `alch_grind_recipes.dm`)
-
-### 2. Cauldron — brew the potion
-1. Boil **at least 90 drams of water** in a cauldron.
-2. Drop in **up to 4 ingredients**.
-3. The cauldron scores every possible recipe: each ingredient is worth **3 points
-   (major attunement), 2 points (medium), or 1 point (minor)** toward the recipes
-   it's tied to.
-4. **If no recipe reaches 5 points, you get nothing** ("Yuck"). Otherwise it brews
-   the **highest-scoring** recipe. Output is normally **90 drams** of reagent (30
-   for stat potions). (`cauldron.dm`, `alch_cauldron_recipe_base.dm`)
-
-**Practical rule:** two "major" ingredients for the same potion (3+3 = 6 ≥ 5) is
-enough to guarantee it. Four of one major ingredient (12 points) makes it
-impossible to accidentally brew something else. **Mixing different ingredients
-risks brewing the wrong recipe** — keep your pot pure unless you know the math.
-
-**Skill gates:** every recipe needs a minimum **Alchemy** level or it simply won't
-mix. As Head Physician you start at **Master (5)**, so the only thing you *can't*
-make round-start is anything gated at Legendary (none of the below are) — you can
-brew literally every recipe in this guide from minute one.
-
-**Smelling:** examine an ingredient and (with enough Alchemy/PER+INT) it tells you
-what it "smells of" — that smell **is** the recipe it's attuned to. With
-`TRAIT_LEGENDARY_ALCHEMIST` (Legendary alchemy) it names the potion outright.
+*A complete reference for every alchemical product, optimized for **lowest cost**:
+foraged herbs, free butchering scraps, and cheap dusts wherever possible. Values
+are from `code/modules/roguetown/roguecrafting/alchemy/`.*
 
 ---
 
-## The master ingredient → potion table
+## The one trick that makes this cheap
 
-Each ingredient points at up to three recipes. **MAJOR = 3 pts, med = 2, minor =
-1.** To brew a potion, use ingredients for which it is the **MAJOR** entry.
+The cauldron scores every recipe from the ingredients you add. Each ingredient is
+worth **3 pts (major attunement), 2 (medium), or 1 (minor)** toward the recipes
+it's tied to. A recipe needs **≥5 points** and must be the **highest** scorer to
+brew. (`cauldron.dm`)
 
-| Ingredient | MAJOR (3) | med (2) | minor (1) |
-|---|---|---|---|
-| **viscera** (butcher) | Strong Health | Health | Antidote |
-| **sinew** (butcher) | Stamina Poison | Endurance | Health |
-| **tail bone** (butcher) | Strong Antidote | Health | Constitution |
-| **troll horn** (butcher trolls) | Strength | Constitution | Endurance |
-| **bonemeal** (grind bone) | Mana | Perception | Antidote |
-| **coal dust** (grind coal) | Antidote | Endurance | Strength |
-| **iron dust** (grind iron) | Endurance | Constitution | Strength |
-| **silver dust** (grind silver) | Strong Antidote | Restoration | Strong Health |
-| **gold dust** (grind gold) | Strong Mana | Restoration | Perception |
-| **earth essentia** | Constitution | Endurance | Strength |
-| **fire essentia** | Strength | Constitution | Fire Warding |
-| **water essentia** | Keen Mind (INT) | Strong Mana | Perception |
-| **air essentia** | Fleet Foot (SPD) | Stamina | Keen Mind |
-| **raw essentia** (runedust) | Keen Mind | Strong Mana | Perception |
-| **pure essentia** (magicdust) | Strong Mana | Endurance | Constitution |
-| **solar dust** (grind sunflower) | Fire Warding | Keen Mind | Perception |
-| **feau dust** (craft) | Fleet Foot | Strong Mana | Strong Antidote |
-| **infernal dust** (grind fang) | Fire Warding | Strong Stam Poison | Keen Mind |
-| **mineral dust** (grind gems) | Poison (Doom) | Strong Mana | Strong Stam Poison |
-| **purified salts** (grind salt) | Antidote | Strong Antidote | Strong Mana |
-| **seed dust** (grind seeds) | Strong Stamina | Stamina | Strong Antidote |
-| **westleach dust** (grind pipeweed) | Perception | Stamina | Fleet Foot |
-| **swampweed dust** (grind swampweed) | Poison (Berry) | Strong Stam Poison | Endurance |
-| **berry powder** (grind berries) | Poison (Berry) | Mana | Strong Mana |
-| **manabloom powder** (grind manabloom) | Mana | Keen Mind | Strong Mana |
-| **sleeping powder** (grind zizo-bane) | Sleep Poison | Seven Clovers (LCK) | Mana |
-| **essence of briar** (grind rosa petals) | Sleep Poison | Antidote | Seven Clovers |
-| **alchemical ozium** (grind poppy→ozium) | Strong Stamina | Seven Clovers | Keen Mind |
-| **atropa** (herb) | Poison (Doom) | Poison (Berry) | Stamina Poison |
-| **matricaria** (herb) | Poison (Berry) | Perception | Poison (Doom) |
-| **symphitum** (herb) | Health | Stamina Poison | Antidote |
-| **taraxacum** (herb) | Stamina Poison | Health | Antidote |
-| **euphrasia** (herb) | Fleet Foot | Stamina Poison | Keen Mind |
-| **paris** (herb) | Strong Stam Poison | Poison (Berry) | Stamina Poison |
-| **calendula** (herb) | Strong Health | Endurance | Health |
-| **mentha** (herb) | Perception | Keen Mind | Stamina |
-| **urtica** (herb) | Health | Fleet Foot | Stamina |
-| **salvia** (herb) | Constitution | Strength | Endurance |
-| **hypericum** (herb) | Stamina | Strong Mana | Antidote |
-| **benedictus** (herb) | Strong Stamina | Stamina | Keen Mind |
-| **valeriana** (herb) | Health | Fleet Foot | Stamina Poison |
-| **artemisia** (herb) | Seven Clovers | Fleet Foot | Health |
-| **rosa** (herb) | Seven Clovers | Antidote | Restoration |
+> ### 🪙 Foolproof rule: **2 of ONE ingredient = its MAJOR potion, guaranteed.**
+> Two copies of a single ingredient give **6 points** to its major recipe, vs only
+> 4 to its medium and 2 to its minor. 6 beats both and clears the 5-point floor —
+> so you **always** get the major. Throw in 3–4 of the same item for extra safety;
+> it still brews the same thing. **Keep the pot pure** — mixing different
+> ingredients is what makes you brew the wrong potion.
+
+So to make any potion cheaply: **find the cheapest ingredient whose MAJOR is that
+potion, and brew 2–4 of it.** The only exception is **Restoration**, which no
+single ingredient majors in — it needs a 2+2 mix (covered below).
+
+### The two stations
+1. **Mortar & pestle** — grind raw stuff (herbs, ore, butchered parts, plants) into
+   the dusts/powders the cauldron wants. XP scales with INT. (`mortarpestle.dm`)
+2. **Cauldron** — boil **90+ drams of water**, drop in your **2–4 ingredients**,
+   collect **90 drams** of potion (30 for stat potions).
+
+### Where the cheap stuff comes from
+- **Herbs** (the backbone of this guide) — **forage them free** from bushes on the
+  map; they regrow. Grind one herb to get its **seed**, then plant it for an endless
+  supply. Common herbs are worth only ~4, so even buying is trivial.
+- **Butchering** — **middle-click any animal corpse with a knife** (no spell/intent)
+  for **free** viscera, sinew, and tail bone. Grind a tail bone → **bonemeal**.
+  Troll corpses give **horns**.
+- **Cheap dusts** — grind **coal** (→coal dust, ~1), **iron** (→iron dust, 3),
+  cheap ore for **earth essentia** (~1) and **air essentia** (4). **Fish** grind into
+  **water essentia** for free.
+- **Skill gate** — every recipe needs a minimum Alchemy level. As Head Physician you
+  start **Master (5)**, so you can brew everything here from minute one.
 
 ---
 
-## Where ingredients come from
+# 🪙 CHEAPEST RECIPE — MASTER TABLE
 
-- **Herbs** (atropa, matricaria, symphitum, taraxacum, euphrasia, paris, calendula,
-  mentha, urtica, salvia, hypericum, benedictus, valeriana, artemisia, rosa):
-  forage them from herb bushes scattered on the map (they regrow), or **plant
-  herbseeds** in soil (~7.5 min to mature). Grinding a herb gives its **herbseed**;
-  seeds are also sold by the **merchant**. Higher Alchemy/Farming = bonus yield.
-- **Butchered parts** (viscera, sinew, tail bone, troll horn): **middle-click an
-  animal corpse with a knife** (no spell/intent selected). Higher Butchering skill =
-  more carved. Horns come specifically from **trolls**.
-- **Ores** (gold/silver/iron/coal) and **gems** (Toper/Gemerald/Saffira/Blortz/
-  Dorpel): mined, or bought. Grind ore→dust, grind gem→mineral dust **plus** bonus
-  gold/element dust (gems are an expensive shortcut to arcane dusts).
-- **Special plants:** poppy (→ozium, also a sedative), swampweed (→swampdust),
-  fyritius (→firedust), manabloom (spawns in the bog, →manabloom powder), pipeweed/
-  westleach (→tobacco dust), sunflower (→solar dust), berries (→berry powder),
-  rosa petals (→briar essence), zizo-bane (found in rot/blight areas →sleep powder).
-- **Fish → water dust. Crow → air dust.** (grind them)
-- **Arcane essentia** (water/fire/air/earth/rune/magic/solar/feau/infernal dust):
-  from grinding the matching source (fish, fyritius, crow, gems, sunflower, infernal
-  fangs) or crafting. **Pure essentia** = craft 1 each of water+fire+air+earth dust
-  on a table. **Feau dust** = craft 2 iron dust + 1 gold dust.
-- **Buy it:** the **Alchemist cargo pack** sells pre-made stat potions, antidotes,
-  strong poison and prosthetics; the **merchant** sells all the herb/plant seeds and
-  some dusts (ozium, etc.). As Head Physician you start `ECONOMIC_RICH` — buying
-  seed stock and a cauldron setup turn-one is viable.
+*Brew 2–4 of the listed ingredient (pure pot) unless it says "mix".*
+
+| Potion | Cheapest recipe | Source | Cost | Gate |
+|---|---|---|---|---|
+| **Elixir of Health** | 2× **urtica** *(or valeriana)* | forage (common herb) | free | Apprentice |
+| **Health (Strong)** | 2× **calendula** *(or viscera)* | forage / butcher | free | Journeyman |
+| **Elixir of Mana** | 2× **bonemeal** | butcher → grind tail bone | free | Apprentice |
+| **Mana (Strong)** | 2× **gold dust** | grind gold *(see note)* | ~precious | Journeyman |
+| **Elixir of Stamina** | 2× **hypericum** | forage | free | Apprentice |
+| **Stamina (Strong)** | 2× **seed dust** | grind any seeds | ~free | Journeyman |
+| **Antidote** | 2× **coal dust** | grind coal | ~1 ea | Apprentice |
+| **Antidote (Strong)** | 2× **tail bone** | butcher animal | free | Journeyman |
+| **Elixir of Restoration** | **2× silver dust + 2× gold dust** *(mix)* | grind precious | expensive | Expert |
+| **Keen Mind** (INT) | 2× **water essentia** | grind fish | free | Expert |
+| **Keen Eye** (PER) | 2× **mentha** | forage | free | Expert |
+| **Enduring Fortitude** (WIL) | 2× **iron dust** | grind iron | ~3 ea | Expert |
+| **Stone Flesh** (CON) | 2× **earth essentia** *(or salvia)* | grind cheap ore / forage | ~1 ea | Expert |
+| **Fleet Foot** (SPD) | 2× **air essentia** *(or euphrasia)* | grind / forage | ~4 | Expert |
+| **Seven Clovers** (LCK) | 2× **artemisia** *(or rosa)* | forage | free | Expert |
+| **Mountain Muscles** (STR) | 2× **fire essentia** *(or troll horn)* | grind fyritius / butcher troll | see note | Expert |
+| **Fire Warding** | 2× **solar dust** | grind sunflower | grow | Master |
+| **Poison (Berry)** | 2× **matricaria** | forage | free | Journeyman |
+| **Poison (Doom)** | 2× **atropa** | forage (rare herb) | ~10 | Expert |
+| **Stamina Poison** | 2× **taraxacum** *(or sinew)* | forage / butcher | free | Journeyman |
+| **Stamina Poison (Strong)** | 2× **paris** | forage (uncommon herb) | ~6 | Expert |
+| **Sleep Poison** | 2× **briar essence** *(or sleeping powder)* | grind rosa petals / forage zizo-bane | free | Master |
+
+**Notes on the few non-free ones:**
+- **Strong Mana** has no cheap major — gold dust (≈15) or magic dust (≈8) are the
+  options. Magic dust is **crafted** from 1 each of water+fire+air+earth dust on a
+  table, so if you're already grinding cheap essentia you can make it for near-free
+  in effort, just slowly.
+- **Restoration** is the only potion with **no major ingredient at all**. Use **2
+  silver dust + 2 gold dust**: that scores Restoration 8 (each is medium) vs Strong
+  Antidote 6 and Strong Mana 6, so Restoration wins. It's intentionally the premium
+  heal — there is no budget version.
+- **Mountain Muscles (STR)** needs **fire essentia** or a **troll horn**. Fire
+  essentia drops as a **bonus 25% of the time when you grind coal or iron**, so
+  stockpile it passively while making Antidote/Fortitude, then brew STR for free.
 
 ---
 
-# THE POTIONS
+# THE POTIONS — details & effects
 
-*Doses below describe per-tick effect while the reagent metabolizes. "90 drams"
-is the standard cauldron yield (≈30 sips). All healing potions self-purge above
-60u in the body to stop over-healing.*
+*Per-tick effects while the reagent metabolizes. Healing potions self-purge above
+60u to stop over-healing.*
 
 ## Healing
 
-### Elixir of Health — `healthpot`
-- **Gate:** Apprentice (any alchemist). **Smell:** sweet berries.
-- **Effect:** −1.75 brute & −1.75 fire, −1.25 oxyloss per tick; heals 3 wound HP;
-  −5 brain, −1.75 cloneloss, −1 eye per tick. Metabolizes ~1u/tick (fast, strong).
-- **Brew with (MAJOR):** symphitum, urtica, valeriana. *(med: viscera, taraxacum,
-  tail bone; minor: sinew, artemisia, calendula)*
-- Your everyday trauma drink and best-seller.
+### Elixir of Health — `healthpot`  ·  Apprentice
+- 🪙 **Cheapest:** 2× **urtica** or **valeriana** (free foraged common herbs). *Also
+  major in symphitum.*
+- **Effect:** −1.75 brute & fire, −1.25 oxy per tick; heals 3 wound HP; −5 brain,
+  −1.75 cloneloss, −1 eye. Fast, strong everyday heal & best-seller.
 
-### Elixir of Health (Strong) — `stronghealth`
-- **Gate:** Journeyman. **Smell:** berry pie.
-- **Effect:** −5 brute, −5 fire, −5 oxyloss per tick; heals 4 wound HP; −5 brain,
-  −5 cloneloss, −2.5 eye. Metabolizes ~2u/tick — a fast, hard burst heal.
-- **Brew with (MAJOR):** viscera, calendula. *(minor: silver dust)*
+### Elixir of Health (Strong) — `stronghealth`  ·  Journeyman
+- 🪙 **Cheapest:** 2× **calendula** (free forage) or 2× **viscera** (free butcher).
+- **Effect:** −5 brute, −5 fire, −5 oxy per tick; heals 4 wound HP; −5 brain/clone,
+  −2.5 eye. Fast burst heal.
 
-### Elixir of Restoration — `restoration`
-- **Gate:** Expert. **Smell:** fizzling berries.
-- **Effect:** −3 brute/fire/oxy per tick **and +60 energy/tick**; heals 3 wound HP;
-  −5 brain, −3 cloneloss, −1.75 eye. The premium "heal + stamina in one" product.
-- **Brew with:** silver dust (med), gold dust (med), rosa (minor) — best made by
-  combining silver + gold dust pots in the pot, or lean on rosa stock.
+### Elixir of Restoration — `restoration`  ·  Expert
+- 🪙 **Cheapest:** **2× silver dust + 2× gold dust** (the only multi-ingredient
+  recipe; no cheap route).
+- **Effect:** −3 brute/fire/oxy **and +60 energy** per tick; heals 3 wound HP. The
+  premium "heal + stamina in one."
 
 ## Mana & Stamina
 
-### Elixir of Mana — `manapot`
-- **Gate:** Apprentice. **Smell:** power.
-- **Effect:** **+30 energy/tick** (restores stamina/mana pool). ~1u/tick.
-- **Brew with (MAJOR):** bonemeal, manabloom powder. *(med: berry powder; minor:
-  sleeping powder)*
+### Elixir of Mana — `manapot`  ·  Apprentice
+- 🪙 **Cheapest:** 2× **bonemeal** (free: butcher any animal, grind the tail bone).
+- **Effect:** +30 energy/tick.
 
-### Elixir of Mana (Strong) — `strongmana`
-- **Gate:** Journeyman. **Smell:** fear.
-- **Effect:** **+120 energy/tick**, ~3u/tick — a near-instant mana refill.
-- **Brew with (MAJOR):** pure essentia (magicdust), gold dust. *(med: water dust,
-  raw essentia, feau dust, mineral dust, hypericum; minor: manabloom/berry powder,
-  purified salts)*
+### Elixir of Mana (Strong) — `strongmana`  ·  Journeyman
+- 🪙 **Cheapest:** 2× **gold dust**, or 2× **magic dust** (craft from cheap essentia).
+- **Effect:** +120 energy/tick — near-instant mana refill.
 
-### Elixir of Stamina — `stampot`
-- **Gate:** Apprentice. **Smell:** fresh air.
-- **Effect:** restores ~20 stamina/tick. ~1u/tick.
-- **Brew with (MAJOR):** hypericum. *(med: seed dust, westleach dust, air essentia,
-  benedictus; minor: mentha, urtica)*
+### Elixir of Stamina — `stampot`  ·  Apprentice
+- 🪙 **Cheapest:** 2× **hypericum** (free forage).
+- **Effect:** restores ~20 stamina/tick.
 
-### Elixir of Stamina (Strong) — `strongstam`
-- **Gate:** Journeyman. **Smell:** clean winds.
+### Elixir of Stamina (Strong) — `strongstam`  ·  Journeyman
+- 🪙 **Cheapest:** 2× **seed dust** (grind any seeds — practically free). *Also major
+  in benedictus and ozium.*
 - **Effect:** restores ~50 stamina/tick.
-- **Brew with (MAJOR):** seed dust, alchemical ozium, benedictus.
 
-## Antidotes (poison cures)
+## Antidotes
 
-### Antidote — `antidote`
-- **Gate:** Apprentice. **Smell:** wet moss.
-- **Effect:** −4 toxin/tick **and strips 1u of every harmful reagent/tick.**
-  Metabolizes very slowly (0.1u/tick → lasts ~15 min on a full dose), so you can
-  pre-drink it prophylactically before a risky meal/meeting.
-- **Brew with (MAJOR):** coal dust, purified salts. *(med: briar essence, rosa;
-  minor: viscera, bonemeal, symphitum, taraxacum, hypericum)*
+### Antidote — `antidote`  ·  Apprentice
+- 🪙 **Cheapest:** 2× **coal dust** (grind coal, ~1 each).
+- **Effect:** −4 toxin/tick **and strips 1u of every harmful reagent/tick**;
+  metabolizes very slowly (~15 min/dose) so you can pre-drink it.
 
-### Antidote (Strong) — `strong_antidote`
-- **Gate:** Journeyman. **Smell:** purity.
-- **Effect:** −12 toxin/tick **and strips 3u of every harmful reagent/tick.** Same
-  long duration. The hard counter to serious poisonings.
-- **Brew with (MAJOR):** silver dust, tail bone. *(med: purified salts; minor: seed
-  dust, feau dust)*
+### Antidote (Strong) — `strong_antidote`  ·  Journeyman
+- 🪙 **Cheapest:** 2× **tail bone** (free butcher). *Silver dust also majors here but
+  costs 20.*
+- **Effect:** −12 toxin/tick **and strips 3u of every harmful reagent/tick.** Hard
+  counter to poisoning.
 
-## Stat Potions (Expert gate, 30 drams)
+## Stat Potions — Expert gate, 30 drams
 
-All seven grant **+3 to one stat while in your system** (status reapplies each tick;
-the reagent metabolizes slowly so it lasts a good while). **Overdose at 33u** →
-jitters + 3 toxin/tick. **They don't stack** — a second buff potion purges the
-first. All smell-gated at **Expert** alchemy.
+All grant **+3 to one stat while in your system** (reapplies each tick). **Overdose
+at 33u** → jitter + 3 toxin/tick. **Don't stack** — a second buff purges the first.
 
-| Potion | Stat | Brew with (MAJOR) |
+| Potion | Stat | 🪙 Cheapest |
 |---|---|---|
-| **Mountain Muscles** | STR +3 | fire essentia, troll horn *(med: salvia)* |
-| **Keen Eye** | PER +3 | westleach dust, mentha *(med: matricaria)* |
-| **Enduring Fortitude** | WIL +3 | iron dust *(med: coal/earth/magic dust, sinew, calendula)* |
-| **Stone Flesh** | CON +3 | earth essentia, salvia *(med: fire/iron dust, troll horn)* |
-| **Keen Mind** | INT +3 | water essentia, raw essentia *(med: mentha, solar dust)* |
-| **Fleet Foot** | SPD +3 | air essentia, feau dust, euphrasia *(med: urtica, artemisia, valeriana)* |
-| **Seven Clovers** | LCK +3 | artemisia, rosa *(med: sleeping powder, ozium)* |
+| **Keen Mind** | INT +3 | 2× **water essentia** (grind fish, free) |
+| **Keen Eye** | PER +3 | 2× **mentha** (forage, free) |
+| **Enduring Fortitude** | WIL +3 | 2× **iron dust** (grind iron, ~3) |
+| **Stone Flesh** | CON +3 | 2× **earth essentia** (~1) or **salvia** (forage) |
+| **Fleet Foot** | SPD +3 | 2× **air essentia** (~4) or **euphrasia** (forage) |
+| **Seven Clovers** | LCK +3 | 2× **artemisia** or **rosa** (forage, free) |
+| **Mountain Muscles** | STR +3 | 2× **fire essentia** (bonus from grinding coal/iron) or **troll horn** |
 
-> **Min-max tip:** brew **Stone Flesh** and drink it yourself — it patches the
-> Physician's −1 CON weakness. **Keen Mind** stacks INT for faster skill gains and
-> sharper diagnosis numbers.
+> **Physician tip:** brew **Stone Flesh** (CON) — it's nearly free from earth essentia
+> and patches your −1 CON. **Keen Mind** (free from fish) boosts skill gain and
+> diagnosis numbers.
 
 ## Utility
 
-### Potion of Fire Warding — `fire_resist`
-- **Gate:** Master. **Smell:** authority. **30 drams.**
-- **Effect:** grants `TRAIT_FIRE_RESIST` — **fire immunity for 15 minutes** per dose.
-- **Brew with (MAJOR):** infernal dust, solar dust. *(minor: fire essentia)*
+### Potion of Fire Warding — `fire_resist`  ·  Master, 30 drams
+- 🪙 **Cheapest:** 2× **solar dust** (grind sunflowers you grow). *Infernal dust also
+  majors but needs slain abyssal fangs.*
+- **Effect:** grants `TRAIT_FIRE_RESIST` — **15 minutes of fire immunity** per dose.
 
-## Poisons (offense / sedation)
+## Poisons
 
-### Poison (Berry) — `berrypoison`
-- **Gate:** Journeyman. **Smell:** death.
-- **Effect:** +3 nausea, +2 toxin/tick (slow, 0.1u/tick). Incapacitates, won't kill
-  in one dose. Dwarves resist it heavily.
-- **Brew with (MAJOR):** swampweed dust, berry powder, matricaria. *(med: atropa,
-  paris)*
+### Poison (Berry) — `berrypoison`  ·  Journeyman
+- 🪙 **Cheapest:** 2× **matricaria** (free forage). *Berry powder & swampweed dust
+  also major.*
+- **Effect:** +3 nausea, +2 toxin/tick; incapacitates, non-lethal single dose.
 
-### Poison (Doom) — `strongpoison`
-- **Gate:** Expert. **Smell:** doom.
-- **Effect:** +6 nausea, +4.5 toxin/tick — **lethal** in a standard dose. Deliberately
-  hard to make.
-- **Brew with (MAJOR):** mineral dust, atropa. *(minor: matricaria)*
+### Poison (Doom) — `strongpoison`  ·  Expert
+- 🪙 **Cheapest:** 2× **atropa** (forage; rare herb ~10). *Mineral dust from gems is
+  the pricier alternative.*
+- **Effect:** +6 nausea, +4.5 toxin/tick — **lethal** in a standard dose.
 
-### Stamina Poison — `stampoison`
-- **Gate:** Journeyman. **Smell:** a slow breeze.
-- **Effect:** −45 energy/tick (drains stamina), 0.3u/tick. Exhausts a target.
-- **Brew with (MAJOR):** sinew, taraxacum. *(med: symphitum, euphrasia; minor:
-  atropa, paris, valeriana)*
+### Stamina Poison — `stampoison`  ·  Journeyman
+- 🪙 **Cheapest:** 2× **taraxacum** (free forage) or 2× **sinew** (free butcher).
+- **Effect:** −45 energy/tick; exhausts a target.
 
-### Stamina Poison (Strong) — `strongstampoison`
-- **Gate:** Expert. **Smell:** stagnant air.
-- **Effect:** −180 energy/tick, very fast (0.9u/tick) — drops someone's stamina
-  near-instantly.
-- **Brew with (MAJOR):** paris. *(med: swampweed dust, infernal dust; minor: mineral
-  dust)*
+### Stamina Poison (Strong) — `strongstampoison`  ·  Expert
+- 🪙 **Cheapest:** 2× **paris** (forage; uncommon ~6).
+- **Effect:** −180 energy/tick — drops stamina near-instantly.
 
-### Sleep Poison — `sleep_powder`
-- **Gate:** Master. **Smell:** numbing mint.
-- **Effect:** applies a **knockout/sleep** status on metabolizing — puts a target to
-  sleep. *Your in-house surgical sedative* so you never have to beg the apothecary.
-- **Brew with (MAJOR):** sleeping powder (grind zizo-bane), essence of briar (grind
-  rosa petals).
-
-> **Ethics/PQ note:** brewing poisons is fine as a tool (sedation, pest control,
-> sanctioned justice), but dosing people is an antagonistic act. As a whitelisted
-> `min_pq 3` role, keep poison use to legitimate medical/RP purposes.
+### Sleep Poison — `sleep_powder`  ·  Master
+- 🪙 **Cheapest:** 2× **briar essence** (grind rosa petals — rosa is a free common
+  herb), or 2× **sleeping powder** (grind zizo-bane, foraged free in rot/blight areas).
+- **Effect:** knocks a target out. **Your in-house surgical sedative** — see the
+  surgery guide. *(Dosing people is antagonistic; keep it to legitimate use on a
+  `min_pq 3` whitelist role.)*
 
 ---
 
-## Fast cheat-sheet: "I want X, I grind Y"
+## Your "free clinic" shopping list
 
-| Want | Grind / craft this |
-|---|---|
-| Healing pots | symphitum/urtica/valeriana herbs, or viscera+calendula for Strong |
-| Mana pots | bone→bonemeal, or manabloom; magicdust/gold for Strong |
-| Stamina pots | hypericum/benedictus; seed dust or ozium for Strong |
-| Antidotes | coal→coaldust + salt→puresalt; silver dust/tail bone for Strong |
-| Stat potions | the matching essentia dust (fire=STR, earth=CON, water=INT, air=SPD…) |
-| Fire Warding | infernal fang→infernal dust, or sunflower→solar dust |
-| Sedative (Sleep) | zizo-bane→sleeping powder, or rosa petals→briar essence |
-| Lethal poison | gems→mineral dust + atropa herb |
+Everything below costs **0 coin** — just foraging, fishing, and butchering:
+
+- **Forage common herbs:** urtica/valeriana (Health), hypericum (Stamina), mentha
+  (Keen Eye), artemisia/rosa (Seven Clovers + Sleep via petals), salvia (Stone
+  Flesh), taraxacum (Stamina Poison), matricaria (Berry Poison), calendula (Strong
+  Health).
+- **Butcher animals:** tail bone → grind to **bonemeal** (Mana) or use whole (Strong
+  Antidote); **viscera** (Strong Health); **sinew** (Stamina Poison).
+- **Fish:** grind to **water essentia** (Keen Mind).
+- **Grind coal:** **coal dust** (Antidote) + bonus **fire essentia** (→ Mountain
+  Muscles). Grind iron for **iron dust** (Enduring Fortitude) + bonus fire essentia.
+
+The only potions that truly cost money are **Restoration** and **Strong Mana**
+(precious metals), and the rarer poisons — everything else a physician needs is
+free off the land.
 
 ### Source files
 `alch_cauldron_recipes.dm`, `alch_grind_recipes.dm`, `ingredients.dm`,
-`cauldron.dm`, `mortarpestle.dm`, `potionbuffs.dm`, and reagent effects in
-`code/modules/roguetown/roguecrafting/alchemy/reagents.dm`.
+`cauldron.dm`, `mortarpestle.dm`, `potionbuffs.dm`, reagent effects in `reagents.dm`;
+prices in `code/__DEFINES/economy/pricing_defines.dm`.
