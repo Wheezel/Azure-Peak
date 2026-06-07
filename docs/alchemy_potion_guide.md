@@ -59,7 +59,7 @@ build your own distinct combo.
 | **Elixir of Health** *(heal brute/fire)* | Appr | **symphitum + urtica** | symphitum, urtica, valeriana | viscera, taraxacum, tail bone | sinew, calendula, artemisia |
 | **Health (Strong)** | Jour | **viscera + calendula** | viscera, calendula | — | silver dust |
 | **Elixir of Mana** *(+energy)* | Appr | **bonemeal + berry powder** | bonemeal, manabloom powder | berry powder | sleeping powder |
-| **Mana (Strong)** | Jour | **gold dust + hypericum** *(no-metal: hypericum + water essentia + mineral dust)* | magic dust, gold dust | water essentia, raw essentia, feau dust, mineral dust, hypericum | purified salts, berry powder, manabloom powder |
+| **Mana (Strong)** | Jour | **hypericum + water essentia + purified salts** *(no metal; or swap salts → berry powder)* | magic dust, gold dust | water essentia, raw essentia, feau dust, mineral dust, hypericum | purified salts, berry powder, manabloom powder |
 | **Elixir of Stamina** | Appr | **hypericum + benedictus** | hypericum | seed dust, air essentia, westleach dust, benedictus | mentha, urtica |
 | **Stamina (Strong)** | Jour | **seed dust + benedictus** | seed dust, ozium, benedictus | — | — |
 | **Antidote** *(cure poison)* | Appr | **briar essence + rosa + viscera** | coal dust, purified salts | briar essence, rosa | viscera, bonemeal, symphitum, taraxacum, hypericum |
