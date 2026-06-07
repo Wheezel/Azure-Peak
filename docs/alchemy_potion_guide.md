@@ -6,23 +6,24 @@ are from `code/modules/roguetown/roguecrafting/alchemy/`.*
 
 ---
 
-## The one trick that makes this cheap
+## How the cauldron scores
 
 The cauldron scores every recipe from the ingredients you add. Each ingredient is
 worth **3 pts (major attunement), 2 (medium), or 1 (minor)** toward the recipes
-it's tied to. A recipe needs **≥5 points** and must be the **highest** scorer to
-brew. (`cauldron.dm`)
+it's tied to. A recipe needs **≥5 points** and must be the **strict highest**
+scorer to brew. (`cauldron.dm`)
 
-> ### 🪙 Foolproof rule: **2 of ONE ingredient = its MAJOR potion, guaranteed.**
-> Two copies of a single ingredient give **6 points** to its major recipe, vs only
-> 4 to its medium and 2 to its minor. 6 beats both and clears the 5-point floor —
-> so you **always** get the major. Throw in 3–4 of the same item for extra safety;
-> it still brews the same thing. **Keep the pot pure** — mixing different
-> ingredients is what makes you brew the wrong potion.
+> ### ⚠️ Hard rule: **NO DUPLICATES — up to 4 *different* ingredients only.**
+> The cauldron **rejects a second ingredient of the same type** ("There is already
+> one in the cauldron! That would ruin the mixture!" — `cauldron.dm:145`). So you
+> can't "stack 2× urtica." You reach the 5-point floor by combining **different**
+> ingredients that share your target: two different **majors** = 6, a **major + a
+> medium** = 5, or **three mediums** = 6, etc.
 
-So to make any potion cheaply: **find the cheapest ingredient whose MAJOR is that
-potion, and brew 2–4 of it.** The only exception is **Restoration**, which no
-single ingredient majors in — it needs a 2+2 mix (covered below).
+So to make a potion cheaply: **combine the cheapest *distinct* ingredients that each
+list your target (as major/medium/minor) until you clear 5 — and make sure no rival
+recipe ties it.** Ties (two recipes at the same top score) brew unreliably, so a few
+recipes need a 3rd ingredient to break a tie (flagged below).
 
 ### The two stations
 1. **Mortar & pestle** — grind raw stuff (herbs, ore, butchered parts, plants) into
@@ -47,47 +48,46 @@ single ingredient majors in — it needs a 2+2 mix (covered below).
 
 # 🪙 MASTER RECIPE TABLE
 
-**How to read it:** brew **2× of any MAJOR ingredient** (pure pot) to guarantee that
-potion. The **🪙 Cheapest** column gives the cheapest viable brew, avoiding fire
-essentia and precious (gold/silver) dust wherever possible — some use a **medium
-combo** (two different mediums whose own majors point elsewhere, so the shared
-medium wins at 8 pts vs 6/6). MAJOR = 3 pts · MEDIUM = 2 · MINOR = 1.
+**How to read it:** every recipe is **distinct ingredients only** (no duplicates).
+The **🪙 Cheapest** column gives a verified combo that clears 5 pts and wins outright,
+favoring the apothecary's herbs and free scraps. MAJOR = 3 pts · MEDIUM = 2 · MINOR = 1.
+The last three columns list **every** ingredient attuned to that potion so you can
+build your own distinct combo.
 
-| Potion (effect) | Gate | 🪙 Cheapest brew | MAJOR (3) | MEDIUM (2) | MINOR (1) |
+| Potion (effect) | Gate | 🪙 Cheapest brew (distinct) | MAJOR (3) | MEDIUM (2) | MINOR (1) |
 |---|---|---|---|---|---|
-| **Elixir of Health** *(heal brute/fire)* | Appr | **2× urtica** (free herb) | symphitum, urtica, valeriana | viscera, taraxacum, tail bone | sinew, calendula, artemisia |
-| **Health (Strong)** | Jour | **2× calendula** or viscera (free) | viscera, calendula | — | silver dust |
-| **Elixir of Mana** *(+energy)* | Appr | **2× bonemeal** (free butcher) | bonemeal, manabloom powder | berry powder | sleeping powder |
-| **Mana (Strong)** | Jour | **2 hypericum + 2 water essentia** (free) | magic dust, gold dust | water essentia, raw essentia, feau dust, mineral dust, hypericum | purified salts, berry powder, manabloom powder |
-| **Elixir of Stamina** | Appr | **2× hypericum** (free herb) | hypericum | seed dust, air essentia, westleach dust, benedictus | mentha, urtica |
-| **Stamina (Strong)** | Jour | **2× seed dust** (~free) | seed dust, ozium, benedictus | — | — |
-| **Antidote** *(cure poison)* | Appr | **2× purified salts** (no metal) | coal dust, purified salts | briar essence, rosa | viscera, bonemeal, symphitum, taraxacum, hypericum |
-| **Antidote (Strong)** | Jour | **2× tail bone** (free butcher) | silver dust, tail bone | purified salts | seed dust, feau dust |
-| **Elixir of Restoration** *(heal+energy)* | Exp | **1 silver + 1 gold + 1 rosa** *(only way)* | — *(none)* | silver dust, gold dust | rosa |
-| **Keen Mind** *(INT +3)* | Exp | **2× water essentia** (free fish) | water essentia, raw essentia | mentha, solar dust, manabloom powder | air essentia, ozium, euphrasia, benedictus, infernal dust |
-| **Keen Eye** *(PER +3)* | Exp | **2× mentha** (free herb) | westleach dust, mentha | bonemeal, matricaria | water essentia, raw essentia, gold dust, solar dust |
-| **Enduring Fortitude** *(WIL +3)* | Exp | **2 calendula + 2 sinew** (free) | iron dust | coal dust, magic dust, sinew, earth essentia, calendula | swampweed dust, troll horn, salvia |
-| **Stone Flesh** *(CON +3)* | Exp | **2× salvia** (free herb) | earth essentia, salvia | fire essentia, iron dust, troll horn | magic dust, tail bone |
-| **Fleet Foot** *(SPD +3)* | Exp | **2× euphrasia** (free herb) | air essentia, feau dust, euphrasia | urtica, artemisia, valeriana | westleach dust |
-| **Seven Clovers** *(LCK +3)* | Exp | **2× artemisia** or rosa (free) | artemisia, rosa | sleeping powder, ozium | briar essence |
-| **Mountain Muscles** *(STR +3)* | Exp | **2× troll horn** (free butcher) | fire essentia, troll horn | salvia | coal dust, iron dust, earth essentia |
-| **Fire Warding** *(15-min fire immunity)* | Mast | **2× solar dust** (grind sunflower) | infernal dust, solar dust | — | fire essentia |
-| **Poison (Berry)** *(incap)* | Jour | **2× matricaria** (free herb) | swampweed dust, berry powder, matricaria | atropa, paris | — |
-| **Poison (Doom)** *(lethal)* | Exp | **2× atropa** (rare herb) | mineral dust, atropa | — | matricaria |
-| **Stamina Poison** *(drain)* | Jour | **2× taraxacum** or sinew (free) | sinew, taraxacum | symphitum, euphrasia | atropa, paris, valeriana |
-| **Stamina Poison (Strong)** | Exp | **2× paris** (uncommon herb) | paris | swampweed dust, infernal dust | mineral dust |
-| **Sleep Poison** *(sedate)* | Mast | **2× briar essence** or sleeping powder | sleeping powder, briar essence | — | — |
+| **Elixir of Health** *(heal brute/fire)* | Appr | **symphitum + urtica** | symphitum, urtica, valeriana | viscera, taraxacum, tail bone | sinew, calendula, artemisia |
+| **Health (Strong)** | Jour | **viscera + calendula** | viscera, calendula | — | silver dust |
+| **Elixir of Mana** *(+energy)* | Appr | **bonemeal + berry powder** | bonemeal, manabloom powder | berry powder | sleeping powder |
+| **Mana (Strong)** | Jour | **gold dust + hypericum** *(no-metal: hypericum + water essentia + mineral dust)* | magic dust, gold dust | water essentia, raw essentia, feau dust, mineral dust, hypericum | purified salts, berry powder, manabloom powder |
+| **Elixir of Stamina** | Appr | **hypericum + benedictus** | hypericum | seed dust, air essentia, westleach dust, benedictus | mentha, urtica |
+| **Stamina (Strong)** | Jour | **seed dust + benedictus** | seed dust, ozium, benedictus | — | — |
+| **Antidote** *(cure poison)* | Appr | **briar essence + rosa + viscera** | coal dust, purified salts | briar essence, rosa | viscera, bonemeal, symphitum, taraxacum, hypericum |
+| **Antidote (Strong)** | Jour | **tail bone + purified salts** | silver dust, tail bone | purified salts | seed dust, feau dust |
+| **Elixir of Restoration** *(heal+energy)* | Exp | **silver dust + gold dust + rosa** | — *(none)* | silver dust, gold dust | rosa |
+| **Keen Mind** *(INT +3)* | Exp | **water essentia + mentha** | water essentia, raw essentia | mentha, solar dust, manabloom powder | air essentia, ozium, euphrasia, benedictus, infernal dust |
+| **Keen Eye** *(PER +3)* | Exp | **mentha + matricaria** | westleach dust, mentha | bonemeal, matricaria | water essentia, raw essentia, gold dust, solar dust |
+| **Enduring Fortitude** *(WIL +3)* | Exp | **iron dust + calendula** *(no-metal: calendula + sinew + coal dust)* | iron dust | coal dust, magic dust, sinew, earth essentia, calendula | swampweed dust, troll horn, salvia |
+| **Stone Flesh** *(CON +3)* | Exp | **salvia + earth essentia** *(or salvia + iron dust)* | earth essentia, salvia | fire essentia, iron dust, troll horn | magic dust, tail bone |
+| **Fleet Foot** *(SPD +3)* | Exp | **euphrasia + urtica** | air essentia, feau dust, euphrasia | urtica, artemisia, valeriana | westleach dust |
+| **Seven Clovers** *(LCK +3)* | Exp | **artemisia + rosa** | artemisia, rosa | sleeping powder, ozium | briar essence |
+| **Mountain Muscles** *(STR +3)* | Exp | **troll horn + salvia + coal dust** *(or fire essentia + troll horn)* | fire essentia, troll horn | salvia | coal dust, iron dust, earth essentia |
+| **Fire Warding** *(15-min fire immunity)* | Mast | **solar dust + infernal dust** | infernal dust, solar dust | — | fire essentia |
+| **Poison (Berry)** *(incap)* | Jour | **matricaria + atropa** *(or matricaria + berry powder)* | swampweed dust, berry powder, matricaria | atropa, paris | — |
+| **Poison (Doom)** *(lethal)* | Exp | **atropa + mineral dust** | mineral dust, atropa | — | matricaria |
+| **Stamina Poison** *(drain)* | Jour | **taraxacum + euphrasia** | sinew, taraxacum | symphitum, euphrasia | atropa, paris, valeriana |
+| **Stamina Poison (Strong)** | Exp | **paris + infernal dust** *(or paris + swampweed dust + mineral dust)* | paris | swampweed dust, infernal dust | mineral dust |
+| **Sleep Poison** *(sedate)* | Mast | **sleeping powder + briar essence** | sleeping powder, briar essence | — | — |
 
-**The four "medium-combo / free" tricks** (avoid fire essentia & gold/silver dust):
-- **Mana (Strong)** = 2 hypericum + 2 water essentia → big-mana **8** vs Stamina 6 / Keen Mind 6. *(or just 2× gold/magic dust if you have them)*
-- **Enduring Fortitude** = 2 calendula + 2 sinew → Fortitude **8** vs Strong Health 6 / Stamina Poison 6. *(replaces iron dust)*
-- **Antidote** = 2 purified salts (grind salt). *Avoid 2 rosa + 2 briar essence — it ties LCK and brews unreliably.* Coal dust (~1) also works.
-- **Mountain Muscles** = 2 troll horn (butcher a troll) → STR **6** vs CON 4. *(the only non-fire-essentia route; salvia can't win, its CON major dominates)*
+**Tie traps (these LOOK valid but brew unreliably — a rival ties the score):**
+- **STR:** ~~troll horn + salvia~~ ties CON 5-5 → add **coal dust** (STR 6 vs CON 5).
+- **Stamina Poison:** ~~taraxacum + symphitum~~ ties Health 5-5 → use **taraxacum + euphrasia**.
+- **Strong Stam Poison:** ~~paris + swampweed dust~~ ties Berry Poison 5-5 → use **paris + infernal dust** (or add mineral dust).
 
-**The one unavoidable cost — Restoration:** only silver dust (med), gold dust (med),
-and rosa (minor) touch it, so you **must** use both metals. Cheapest is **1 silver +
-1 gold + 1 rosa = exactly 5 pts** (beats Strong Antidote / Strong Mana / Seven Clovers
-at 3 each). No herb-only version exists.
+**Recipes that have no herb-only / cheap route:**
+- **Restoration** — only silver (med), gold (med), rosa (minor) exist; **must** use both metals. *silver + gold + rosa = 5.*
+- **Doom Poison** — needs **atropa + mineral dust** (a gem); you can't double atropa.
+- **Fire Warding** — needs **both** solar **and** infernal dust (one minor can't reach 5).
 
 ## Fixed-recipe specials (table craft, not the cauldron point system)
 
@@ -109,6 +109,11 @@ can drench it from a cursed-blood indexer instead.
 
 *Per-tick effects while the reagent metabolizes. Healing potions self-purge above
 60u to stop over-healing.*
+
+> **⚠️ Recipes below: use the MASTER RECIPE TABLE above.** The per-entry "🪙 Cheapest"
+> notes in this section predate the no-duplicate fix and may say "2× X" — that does
+> **not** work (the cauldron rejects duplicate ingredients). Trust the master table's
+> distinct-ingredient combos.
 
 ## Healing
 
