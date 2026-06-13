@@ -350,8 +350,124 @@ from the chart above, ending in `?`.*
 It may also visibly **pulse** — gently (moderate, score 50–74) or strongly (deeply
 satisfied, 75–100). A strong pulse = near-perfect answer.
 
+---
+
+# 🧠 PERSONALITY SYSTEM — archetypes, traits, quirks & combos
+
+Each beast rolls a **random personality** on spawn:
+1. One **Archetype** (of 6) → sets the *pools* it draws from.
+2. **2 non-conflicting Traits** from that archetype's pool → decide **which aspects it
+   asks about** and the **word-count + punctuation** it wants.
+3. **3 non-conflicting Quirks** (rarity-weighted) from the pool → behavioral gotchas
+   that modify scoring, timing, or do things to the room.
+
+Traits and quirks are **hidden** — you identify them over time (via the linked stone
+rack's calibration / `understanding_bonus`). Each personality element has a thematic
+**herb** tied to it (used in calibration/identification).
+
+## How the two traits combine (the core min-max rule)
+- **Aspects asked = the *union* of both traits' liked concepts.** A {Violent,
+  Philosophical} beast asks about pain/blood/destruction/fear/power **and** wisdom.
+- **Word range + punctuation come from ONE trait** (the last one rolled overrides),
+  so the beast wants *either* trait's style — if `?`/short keeps under-scoring, try the
+  other trait's `.`/long. **Quirks can override punctuation entirely** (below) and
+  punish you hard for missing it — so **satisfy the quirk's punctuation first.**
+- Conflicting traits never co-occur, so you'll never face contradictions like
+  Violent+Peaceful or Obedient(`!`)+Curious(`?`).
+
+---
+
+## 🎭 The 6 Archetypes
+
+| Archetype | Personality | Calibration herb | Trait pool | Quirk pool |
+|---|---|---|---|---|
+| **Fearful** | anxious, easily frightened | **valeriana** | cautious, observant, peaceful, curious, creative, analytical | timid, obedient, forgetful, affectionate, patient, discharge |
+| **Authoritarian** | demands order & respect | **salvia** | ambitious, logical, orderly, dominant, honest, observant, analytical | royal, ambitious, territorial, stubborn, obedient, discharge |
+| **Aggressive** | anger & violence | **urtica** | violent, impulsive, territorial, dominant, destructive, ambitious, chaotic | impatient, territorial, hoarder, stubborn, royal, ambitious, discharge |
+| **Arbitrary** | unpredictable, whimsical | **artemisia** | playful, creative, deception, chaotic, curious, impulsive, destructive | *(nearly all 15 quirks)* |
+| **Inquisitive** | constantly seeks knowledge | **mentha** | curious, philosophical, logical, observant, analytical, orderly, peaceful, honest, playful | curious, repetitive, hoarder, patient, affectionate, timid, mimic, discharge |
+| **Split personality** | shifting, contradictory | **rosa** | *(almost all 19 traits)* | impatient, royal, territorial, affectionate, discharge |
+
+---
+
+## 🧬 The 19 Traits — aspects asked + answer style
+
+*The beast asks about its traits' aspects; answer length/punctuation should match one
+trait's column (unless a quirk overrides punctuation).*
+
+| Trait | Asks about (aspects) | Words | Punct | Conflicts with |
+|---|---|---|---|---|
+| **Deception** | lies, power, fear | 3–15 | `?` | honest |
+| **Violent** | pain, blood, destruction, fear, power | 1–8 | `!` | peaceful |
+| **Cautious** | fear, order, cowardice | 5–20 | `.` | impulsive, destructive, curious |
+| **Observant** | memory, truth, wisdom, creation | 8–25 | `.` | impulsive |
+| **Peaceful** | mercy, love, unity, creation | 4–18 | `.` | violent, destructive |
+| **Creative** | creation, dreams, beauty, transformation, love | 6–30 | `?` | logical, orderly, destructive |
+| **Curious** | truth, wisdom, memory | 3–25 | `?` | cautious |
+| **Ambitious** | power, growth | 2–12 | `!` | peaceful |
+| **Logical** | truth, order, wisdom | 5–20 | `.` | chaotic, creative |
+| **Honest** | truth, justice | 3–15 | `.` | deception |
+| **Orderly** | order | 4–18 | `.` | chaotic, impulsive, creative, playful |
+| **Impulsive** | freedom, chaos | 1–6 | `!` | cautious, orderly, observant, philosophical, analytical |
+| **Territorial** | power, courage | 2–10 | `!` | — |
+| **Dominant** | power, greed | 2–8 | `!` | — |
+| **Destructive** | destruction, decay, chaos, pain | 1–8 | `!` | peaceful, creative, cautious |
+| **Playful** | chaos, companionship | 3–12 | `?` | orderly |
+| **Chaotic** | chaos, freedom, transformation | 1–15 | `?` | orderly, logical |
+| **Philosophical** | wisdom | 8–30 | `?` | impulsive |
+| **Analytical** | truth | 6–25 | `.` | impulsive |
+
+---
+
+## ⚙️ The 15 Quirks — the gotchas (and how to satisfy each)
+
+**Language quirks** change scoring/requirements (failing them = −25 score and usually
+zeroed happiness, so these dominate your answer):
+
+| Quirk | What it demands / does | How to satisfy | Conflicts | Rarity |
+|---|---|---|---|---|
+| **Obedient** | Forces punctuation to **`!`** — answer must SHOUT | End every answer with **!** | stubborn, timid, curious | common |
+| **Curious** | Forces punctuation to **`?`** | End with **?** | timid, obedient | rare |
+| **Timid** | Hates shouting — ending **`!`** = −25; *any other* ending = **+20 bonus** | Never end with `!` (use `?`/`.`) | royal, obedient, curious | common |
+| **Impatient** | Answer **within 10s** of interacting | Speak fast after clicking it | patient | common |
+| **Patient** | Wait **≥10s** after interacting before answering | Pause before you speak | impatient | rare |
+| **Royal** | Must address it by **title** (T2+): *Majesty, Great One, Master, Overlord, Eminence* | Include its title in the answer | — | rare |
+| **Ambitious** | Favors **nobles** (T2+); non-nobles −25 | Be a noble (or have the title trait) | — | very rare |
+| **Affectionate** | You must stand **adjacent** (≤1 tile) | Hug the beast while answering | — | common |
+| **Forgetful** | May **forget answers >5 words** → total fail (25% base, less at high tier/happiness) | Keep answers **≤5 words** to be safe | — | common |
+| **Stubborn** | Denies answers that differ **>25 score** from your last (in streaks of 2) | Keep answer quality consistent | obedient | common |
+
+**Behavior / environment / item quirks** (don't change your score directly, but matter):
+
+| Quirk | Type | What it does |
+|---|---|---|
+| **Discharge** | Behavior | Spits colored projectiles when **unhappy** (chance rises as happiness drops and at very high/low scores). Keep it fed/happy. |
+| **Repetitive** | Behavior | 75% chance to **repeat the same topic** on the next question. |
+| **Mimic** | Behavior | **Announces your speech server-wide** (garbled at low tiers) on a good answer. Very rare. |
+| **Territorial** | Environment | **Attacks anyone within 2 tiles** when happiness < 75% (gibs corpses). **Calm it with fresh-butchered meat.** |
+| **Hoarder** | Interact + Behavior + Environment | **Wants/demands valuables and hates thieves** — give it treasure. |
+
+> **Stacking penalties:** a beast can roll up to 3 quirks, so several requirements can
+> apply at once (e.g. **Affectionate + Obedient + Impatient** = stand adjacent, shout,
+> and answer within 10s — all together). Each missed requirement is −25, so figure out
+> all three before grinding answers.
+
+---
+
+## ✅ Putting it together — the full optimal answer
+1. **Identify the aspect** from the question → grab 2 keywords from the chart.
+2. **Match the word count** to one of its 2 traits (when unsure, a ~5–8-word answer
+   sits inside most trait ranges; if Forgetful, go **≤5 words**).
+3. **End with the right punctuation:** a quirk's demand (Obedient `!`, Curious `?`,
+   Timid *not* `!`) **overrides** the trait's `?`/`.`/`!` — satisfy the quirk.
+4. **Meet the situational quirks:** stand adjacent (Affectionate), use its title
+   (Royal), time it right (Patient/Impatient), keep it fed (Territorial/Discharge).
+
+Example vs an {Authoritarian: Dominant+Royal-titled "Majesty", Obedient} beast asking
+*"What is power?"* → **"Strength is control, Majesty!"** (2 keywords + title + `!`).
+
 ### Source files
 `heart_concepts.dm` (aspects/questions/keywords), `heart_component.dm` (scoring &
-rewards), `heart_beast.dm` (the structure & feeding), plus `heart_traits.dm`,
-`heart_quirks.dm`, `heart_personalities.dm` (the beast's random personality that
-decides which aspects it asks about and tweaks word-count/punctuation preferences).
+rewards), `heart_beast.dm` (structure & feeding), `heart_personalities.dm` (archetypes),
+`heart_traits.dm` (traits), `heart_quirks.dm` + `heart_quirks/` (quirks),
+`heart_rack.dm` (calibration), `_HEART_DEFINES.dm` (quirk-type flags).
