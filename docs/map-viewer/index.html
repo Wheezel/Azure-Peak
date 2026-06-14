@@ -35,10 +35,14 @@
   .t-sacred{background:#2ecc71} .t-manor{background:#c0392b}
   #hint { position:absolute; bottom:8px; left:10px; z-index:10; font-size:11.5px; color:#7d8a96;
     background:rgba(20,24,30,.7); padding:4px 8px; border-radius:6px; }
+  #err { position:absolute; bottom:34px; left:10px; z-index:20; max-width:80%; display:none;
+    color:#ffb3b3; background:rgba(40,10,10,.92); border:1px solid #a33; border-radius:8px;
+    padding:6px 10px; font-size:12px; white-space:pre-wrap; }
 </style>
 </head>
 <body>
 <div id="osd"></div>
+<div id="err"></div>
 
 <div id="bar">
   <b>dun_world</b>
@@ -114,7 +118,13 @@ function loadZ(z){
   viewer.open("dun_world-z"+z+".dzi");
 }
 
+function showErr(m){ const e=document.getElementById("err"); e.style.display="block";
+  e.textContent=(e.textContent? e.textContent+"\n":"")+m; }
+
 viewer.addHandler("open", ()=>{ drawPins(); });
+viewer.addHandler("open-failed", e=>showErr("Map descriptor failed to load: dun_world-z"+currentZ+".dzi  ("+(e.message||"unknown")+")"));
+let _tf=0;
+viewer.addHandler("tile-load-failed", e=>{ _tf++; if(_tf<=2) showErr("Tile failed to load: "+((e.tile&&e.tile.url)||"?")); });
 
 document.querySelectorAll(".zbtn").forEach(b=>{
   b.onclick = ()=>loadZ(+b.dataset.z);
