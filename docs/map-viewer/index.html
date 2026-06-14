@@ -113,17 +113,29 @@ function flyTo(p){
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 3.5));
 }
 
+// OpenSeadragon refuses WEBP-format .dzi descriptors, so we feed it a custom
+// tile source (same Deep Zoom geometry) and build the .webp URLs ourselves.
+function tileSourceFor(z){
+  return {
+    width: 4080, height: 7200,
+    tileSize: 1024, tileOverlap: 1,
+    minLevel: 0, maxLevel: 13,
+    getTileUrl: function(level, x, y){
+      return "dun_world-z"+z+"_files/"+level+"/"+x+"_"+y+".webp";
+    }
+  };
+}
 function loadZ(z){
   currentZ = z;
   document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", +b.dataset.z===z));
-  viewer.open("dun_world-z"+z+".dzi");
+  viewer.open(tileSourceFor(z));
 }
 
 function showErr(m){ const e=document.getElementById("err"); e.style.display="block";
   e.textContent=(e.textContent? e.textContent+"\n":"")+m; }
 let _ok=0,_tf=0;
 function setStatus(extra){ document.getElementById("hint").textContent =
-  "BUILD v4 · z"+currentZ+" · tiles ok:"+_ok+" fail:"+_tf+(extra?" · "+extra:""); }
+  "BUILD v5 · z"+currentZ+" · tiles ok:"+_ok+" fail:"+_tf+(extra?" · "+extra:""); }
 window.addEventListener("error", e=>showErr("JS error: "+(e.message||"?")+(e.filename?" @ "+e.filename.split("/").pop()+":"+e.lineno:"")));
 
 viewer.addHandler("open", e=>{ _ok=0;_tf=0; try{ drawPins(); }catch(ex){ showErr("drawPins: "+ex.message); }
