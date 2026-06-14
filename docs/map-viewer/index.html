@@ -56,7 +56,7 @@
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
 
-<script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
 <script>
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
 let pois = {};
@@ -94,13 +94,15 @@ function drawPins(){
     items.appendChild(row);
     // map pin
     if(showPins){
-      const el = document.createElement("div");
-      el.className = "pin t-"+p.type;
-      el.innerHTML = `<span class="lbl">${p.name} (${p.x},${p.y})</span>`;
-      el.onclick = ()=>flyTo(p);
-      viewer.addOverlay({ element: el,
-        location: viewer.viewport.imageToViewportCoordinates(p.px, p.py),
-        placement: "CENTER" });
+      try {
+        const el = document.createElement("div");
+        el.className = "pin t-"+p.type;
+        el.innerHTML = `<span class="lbl">${p.name} (${p.x},${p.y})</span>`;
+        el.onclick = ()=>flyTo(p);
+        viewer.addOverlay({ element: el,
+          location: viewer.viewport.imageToViewportCoordinates(p.px, p.py),
+          placement: OpenSeadragon.Placement.CENTER });
+      } catch(ex){ showErr("overlay: "+ex.message); }
     }
   });
 }
@@ -121,10 +123,10 @@ function showErr(m){ const e=document.getElementById("err"); e.style.display="bl
   e.textContent=(e.textContent? e.textContent+"\n":"")+m; }
 let _ok=0,_tf=0;
 function setStatus(extra){ document.getElementById("hint").textContent =
-  "BUILD v3 · z"+currentZ+" · tiles ok:"+_ok+" fail:"+_tf+(extra?" · "+extra:""); }
-window.addEventListener("error", e=>showErr("JS error: "+e.message));
+  "BUILD v4 · z"+currentZ+" · tiles ok:"+_ok+" fail:"+_tf+(extra?" · "+extra:""); }
+window.addEventListener("error", e=>showErr("JS error: "+(e.message||"?")+(e.filename?" @ "+e.filename.split("/").pop()+":"+e.lineno:"")));
 
-viewer.addHandler("open", e=>{ _ok=0;_tf=0; drawPins();
+viewer.addHandler("open", e=>{ _ok=0;_tf=0; try{ drawPins(); }catch(ex){ showErr("drawPins: "+ex.message); }
   setStatus("opened "+(e.source? e.source.width+"x"+e.source.height : "")); });
 viewer.addHandler("open-failed", e=>showErr("Descriptor failed: dun_world-z"+currentZ+".dzi ("+(e.message||"?")+")"));
 viewer.addHandler("tile-loaded", ()=>{ _ok++; if(_ok%5===0||_ok<5) setStatus(); });
