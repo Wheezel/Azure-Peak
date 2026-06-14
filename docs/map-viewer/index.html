@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure-Peak — dun_world Map Viewer</title>
+<style>
+  :root { --bg:#0e1014; --panel:#171b21; --ink:#e7eef0; --accent:#7fd1a0; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:system-ui,Segoe UI,Roboto,sans-serif; overflow:hidden; }
+  #osd { position:absolute; inset:0; background:#000; }
+  #bar { position:absolute; top:10px; left:10px; z-index:10; display:flex; gap:8px;
+    align-items:center; flex-wrap:wrap; background:rgba(20,24,30,.85);
+    padding:8px 10px; border:1px solid #2c3540; border-radius:10px; backdrop-filter:blur(4px); }
+  #bar b { font-size:14px; margin-right:4px; }
+  .zbtn { cursor:pointer; border:1px solid #3a4654; background:#222a33; color:var(--ink);
+    padding:5px 11px; border-radius:7px; font-size:13px; }
+  .zbtn.active { background:var(--accent); color:#06140c; border-color:var(--accent); font-weight:600; }
+  #pintoggle { cursor:pointer; user-select:none; font-size:13px; display:flex; gap:5px; align-items:center; }
+  #poilist { position:absolute; top:10px; right:10px; z-index:10; width:230px; max-height:80%;
+    overflow:auto; background:rgba(20,24,30,.85); border:1px solid #2c3540; border-radius:10px;
+    padding:8px 10px; font-size:12.5px; backdrop-filter:blur(4px); }
+  #poilist h4 { margin:2px 0 7px; font-size:12px; color:#9fb3c0; text-transform:uppercase; letter-spacing:.5px; }
+  .poiitem { cursor:pointer; padding:4px 6px; border-radius:6px; display:flex; gap:7px; align-items:center; }
+  .poiitem:hover { background:#222c36; }
+  .dot { width:11px; height:11px; border-radius:50%; flex:0 0 auto; border:1.5px solid #0008; }
+  .pin { width:14px; height:14px; border-radius:50%; border:2px solid #fff; transform:translate(-50%,-50%);
+    box-shadow:0 0 0 1px #000a, 0 0 7px #000a; cursor:pointer; position:relative; }
+  .pin .lbl { position:absolute; left:16px; top:50%; transform:translateY(-50%); white-space:nowrap;
+    background:rgba(10,14,12,.9); border:1px solid #3c5a40; padding:2px 7px; border-radius:6px;
+    font-size:12px; color:#eaf5ea; opacity:0; transition:opacity .12s; pointer-events:none; }
+  .pin:hover .lbl { opacity:1; }
+  .t-tree{background:#4aa3df} .t-mother{background:#f1c40f} .t-church{background:#ffe169}
+  .t-sacred{background:#2ecc71} .t-manor{background:#c0392b}
+  #hint { position:absolute; bottom:8px; left:10px; z-index:10; font-size:11.5px; color:#7d8a96;
+    background:rgba(20,24,30,.7); padding:4px 8px; border-radius:6px; }
+</style>
+</head>
+<body>
+<div id="osd"></div>
+
+<div id="bar">
+  <b>dun_world</b>
+  <span class="zbtn" data-z="2">z2 · surface/town</span>
+  <span class="zbtn" data-z="3">z3 · mountains/bog</span>
+  <span class="zbtn" data-z="4">z4 · high ground</span>
+  <span class="zbtn" data-z="1">z1 · underground</span>
+  <label id="pintoggle"><input type="checkbox" id="pinchk" checked> pins</label>
+</div>
+
+<div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
+<div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
+
+<script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js"></script>
+<script>
+const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
+let pois = {};
+let currentZ = 2;
+let showPins = true;
+
+const viewer = OpenSeadragon({
+  id: "osd",
+  prefixUrl: OSD_IMG,
+  tileSources: "dun_world-z2.dzi",
+  showNavigator: true,
+  navigatorPosition: "BOTTOM_RIGHT",
+  navigatorHeight: 150, navigatorWidth: 90,
+  minZoomImageRatio: 0.5,
+  maxZoomPixelRatio: 4,
+  gestureSettingsMouse: { clickToZoom:false },
+  showRotationControl: false,
+  zoomPerScroll: 1.4,
+  animationTime: 0.7
+});
+
+function clearPins(){ viewer.clearOverlays(); }
+
+function drawPins(){
+  clearPins();
+  const items = document.getElementById("poiitems");
+  items.innerHTML = "";
+  const list = pois[currentZ] || [];
+  if(!list.length){ items.innerHTML = "<div style='color:#7d8a96'>none on this level</div>"; }
+  list.forEach((p,i)=>{
+    // list entry
+    const row = document.createElement("div");
+    row.className="poiitem";
+    row.innerHTML = `<span class="dot t-${p.type}"></span><span>${p.name}</span>`;
+    row.onclick = ()=>flyTo(p);
+    items.appendChild(row);
+    // map pin
+    if(showPins){
+      const el = document.createElement("div");
+      el.className = "pin t-"+p.type;
+      el.innerHTML = `<span class="lbl">${p.name} (${p.x},${p.y})</span>`;
+      el.onclick = ()=>flyTo(p);
+      viewer.addOverlay({ element: el,
+        location: viewer.viewport.imageToViewportCoordinates(p.px, p.py),
+        placement: "CENTER" });
+    }
+  });
+}
+
+function flyTo(p){
+  const vp = viewer.viewport.imageToViewportCoordinates(p.px, p.py);
+  viewer.viewport.panTo(vp);
+  viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 3.5));
+}
+
+function loadZ(z){
+  currentZ = z;
+  document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", +b.dataset.z===z));
+  viewer.open("dun_world-z"+z+".dzi");
+}
+
+viewer.addHandler("open", ()=>{ drawPins(); });
+
+document.querySelectorAll(".zbtn").forEach(b=>{
+  b.onclick = ()=>loadZ(+b.dataset.z);
+});
+document.getElementById("pinchk").onchange = (e)=>{ showPins = e.target.checked; drawPins(); };
+
+fetch("pois.json").then(r=>r.json()).then(d=>{ pois=d; drawPins(); })
+  .catch(()=>{ document.getElementById("poiitems").innerHTML="<div style='color:#c66'>pois.json not found</div>"; });
+
+loadZ(2);
+</script>
+</body>
+</html>
