@@ -66,7 +66,6 @@ let showPins = true;
 const viewer = OpenSeadragon({
   id: "osd",
   prefixUrl: OSD_IMG,
-  tileSources: "dun_world-z2.dzi",
   showNavigator: true,
   navigatorPosition: "BOTTOM_RIGHT",
   navigatorHeight: 150, navigatorWidth: 90,
@@ -120,11 +119,16 @@ function loadZ(z){
 
 function showErr(m){ const e=document.getElementById("err"); e.style.display="block";
   e.textContent=(e.textContent? e.textContent+"\n":"")+m; }
+let _ok=0,_tf=0;
+function setStatus(extra){ document.getElementById("hint").textContent =
+  "BUILD v3 · z"+currentZ+" · tiles ok:"+_ok+" fail:"+_tf+(extra?" · "+extra:""); }
+window.addEventListener("error", e=>showErr("JS error: "+e.message));
 
-viewer.addHandler("open", ()=>{ drawPins(); });
-viewer.addHandler("open-failed", e=>showErr("Map descriptor failed to load: dun_world-z"+currentZ+".dzi  ("+(e.message||"unknown")+")"));
-let _tf=0;
-viewer.addHandler("tile-load-failed", e=>{ _tf++; if(_tf<=2) showErr("Tile failed to load: "+((e.tile&&e.tile.url)||"?")); });
+viewer.addHandler("open", e=>{ _ok=0;_tf=0; drawPins();
+  setStatus("opened "+(e.source? e.source.width+"x"+e.source.height : "")); });
+viewer.addHandler("open-failed", e=>showErr("Descriptor failed: dun_world-z"+currentZ+".dzi ("+(e.message||"?")+")"));
+viewer.addHandler("tile-loaded", ()=>{ _ok++; if(_ok%5===0||_ok<5) setStatus(); });
+viewer.addHandler("tile-load-failed", e=>{ _tf++; setStatus(); if(_tf<=3) showErr("Tile failed: "+((e.tile&&e.tile.url)||"?")); });
 
 document.querySelectorAll(".zbtn").forEach(b=>{
   b.onclick = ()=>loadZ(+b.dataset.z);
