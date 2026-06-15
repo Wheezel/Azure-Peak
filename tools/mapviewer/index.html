@@ -21,9 +21,12 @@
   .arealbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
     background:rgba(8,12,10,.8); border:1px solid #3c5a40; color:#cfe8d4;
     font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
-  .keylbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
-    background:rgba(30,22,6,.86); border:1px solid #b8902f; color:#f3d99a;
-    font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
+  .keypin { transform:translate(-50%,-50%); pointer-events:none; position:relative; }
+  .kdot { display:block; width:7px; height:7px; border-radius:50%;
+    border:1.5px solid rgba(0,0,0,.6); box-shadow:0 0 0 1px rgba(0,0,0,.45); }
+  .klbl { position:absolute; left:9px; top:50%; transform:translateY(-50%); white-space:nowrap;
+    background:rgba(16,13,6,.9); border:1px solid; line-height:1.2;
+    font-size:11px; padding:1px 5px; border-radius:5px; }
   #poilist { position:absolute; top:10px; right:10px; z-index:10; width:230px; max-height:80%;
     overflow:auto; background:rgba(20,24,30,.85); border:1px solid #2c3540; border-radius:10px;
     padding:8px 10px; font-size:12.5px; backdrop-filter:blur(4px); }
@@ -76,6 +79,9 @@ function showErr(m){ const e=document.getElementById("err"); e.style.display="bl
   e.textContent=(e.textContent? e.textContent+"\n":"")+m; }
 window.addEventListener("error", e=>showErr("JS error: "+(e.message||"?")));
 
+// Stable per-key colour: same lockid -> same hue, so matching doors share a colour.
+function keyColor(id){ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))%360; return "hsl("+h+",72%,58%)"; }
+
 // OpenSeadragon won't read a WEBP .dzi, so we supply a custom tile source.
 function tileSourceFor(z){
   const [w,h] = META.dims[z];
@@ -118,7 +124,20 @@ function renderOverlays(){
   if(showAreas)
     (AREAS[currentZ] || []).forEach(a=> addLabel("arealbl", a.name, a.px, a.py, a.w||32, 55));
   if(showKeys)
-    (KEYS[currentZ] || []).forEach(k=> addLabel("keylbl", "🔑 "+(k.key||k.lockid), k.px, k.py, 32, 24));
+    (KEYS[currentZ] || []).forEach(k=>{
+      try {
+        const color = keyColor(k.lockid);
+        const wrap = document.createElement("div"); wrap.className = "keypin";
+        const dot = document.createElement("span"); dot.className = "kdot"; dot.style.background = color;
+        const lbl = document.createElement("span"); lbl.className = "klbl"; lbl.style.display = "none";
+        lbl.textContent = k.key || k.lockid; lbl.style.color = color; lbl.style.borderColor = color;
+        wrap.appendChild(dot); wrap.appendChild(lbl);
+        viewer.addOverlay({ element: wrap,
+          location: viewer.viewport.imageToViewportCoordinates(k.px, k.py),
+          placement: OpenSeadragon.Placement.CENTER });
+        labelEls.push({ el: lbl, px: k.px, w: 32, thr: 24 });
+      } catch(ex){ showErr("key: "+ex.message); }
+    });
 }
 
 // Declutter: show a label once its feature is big enough on screen — region/key
