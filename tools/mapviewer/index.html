@@ -69,7 +69,9 @@
 <div id="bar"><b>dun_world</b><span id="zbtns"></span>
   <label class="toggle"><input type="checkbox" id="pinchk" checked> pins</label>
   <label class="toggle"><input type="checkbox" id="areachk"> areas</label>
-  <label class="toggle"><input type="checkbox" id="keychk"> keys</label></div>
+  <label class="toggle"><input type="checkbox" id="borderchk"> borders</label>
+  <label class="toggle"><input type="checkbox" id="keychk"> keys</label>
+  <label class="toggle"><input type="checkbox" id="routechk"> route</label></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="keypanel">
   <h4>Keys <span id="keycount"></span></h4>
@@ -85,6 +87,10 @@ const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/opensead
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
 let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
+let BORDERS = {}, WALK = {}, showBorders = false, routeMode = false;
+let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
+let routeStart = null, routeEnd = null, routePts = null, routeZ = null;
+const SVGNS = "http://www.w3.org/2000/svg";
 
 const viewer = OpenSeadragon({
   id: "osd", prefixUrl: OSD_IMG,
@@ -112,6 +118,16 @@ function tileSourceFor(z){
 // (re)build all overlays for the current level: POI pins + area-name labels.
 function renderOverlays(){
   viewer.clearOverlays(); labelEls = [];
+  // full-image SVG overlay (scales with zoom) for area borders + the route line
+  const dim = META.dims[currentZ];
+  svgEl = document.createElementNS(SVGNS, "svg");
+  svgEl.setAttribute("viewBox", "0 0 " + dim[0] + " " + dim[1]);
+  svgEl.setAttribute("preserveAspectRatio", "none");
+  svgEl.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible";
+  gBorders = document.createElementNS(SVGNS, "g"); svgEl.appendChild(gBorders);
+  gRoute = document.createElementNS(SVGNS, "g"); svgEl.appendChild(gRoute);
+  viewer.addOverlay({ element: svgEl, location: new OpenSeadragon.Rect(0, 0, 1, dim[1]/dim[0]) });
+  drawBorders(); drawRoute();
   const items = document.getElementById("poiitems"); items.innerHTML = "";
   const list = POIS[currentZ] || [];
   if(!list.length) items.innerHTML = "<div style='color:#7d8a96'>none on this level</div>";
@@ -172,6 +188,109 @@ function updateAreaVis(){
 }
 let _rafVis = null;
 function scheduleAreaVis(){ if(_rafVis) return; _rafVis = requestAnimationFrame(()=>{ _rafVis=null; updateAreaVis(); }); }
+
+function setHint(t){ document.getElementById("hint").textContent = t; }
+
+// ---- Area/building borders (white outlines) ----
+function drawBorders(){
+  if(!gBorders) return;
+  gBorders.textContent = "";
+  if(!showBorders) return;
+  let d = "";
+  for(const s of (BORDERS[currentZ] || [])) d += "M"+s[0]+" "+s[1]+"L"+s[2]+" "+s[3];
+  if(!d) return;
+  const p = document.createElementNS(SVGNS, "path");
+  p.setAttribute("d", d); p.setAttribute("fill", "none");
+  p.setAttribute("stroke", "#ffffff"); p.setAttribute("stroke-width", "1.1");
+  p.setAttribute("stroke-opacity", "0.8"); p.setAttribute("vector-effect", "non-scaling-stroke");
+  gBorders.appendChild(p);
+}
+
+// ---- Routing (Google-Maps-style path) ----
+function tilePx(){ return META.dims[currentZ][0] / META.grid.cols; }
+function drawRoute(){
+  if(!gRoute) return;
+  gRoute.textContent = "";
+  if(routeZ !== currentZ) return;
+  const tp = tilePx(), ctr = (r,c)=>[ (c+0.5)*tp, (r+0.5)*tp ];
+  if(routePts && routePts.length){
+    let d = "";
+    routePts.forEach((p,i)=>{ const xy = ctr(p[0],p[1]); d += (i?"L":"M")+xy[0].toFixed(1)+" "+xy[1].toFixed(1); });
+    for(const [col,w] of [["#06203a","7"],["#3da5ff","3.5"]]){
+      const ln = document.createElementNS(SVGNS,"path");
+      ln.setAttribute("d",d); ln.setAttribute("fill","none"); ln.setAttribute("stroke",col);
+      ln.setAttribute("stroke-width",w); ln.setAttribute("stroke-linejoin","round");
+      ln.setAttribute("stroke-linecap","round"); ln.setAttribute("vector-effect","non-scaling-stroke");
+      gRoute.appendChild(ln);
+    }
+  }
+  const marker = (t,color)=>{ if(!t) return; const xy = ctr(t.r,t.c);
+    const m = document.createElementNS(SVGNS,"circle");
+    m.setAttribute("cx",xy[0]); m.setAttribute("cy",xy[1]); m.setAttribute("r","46");
+    m.setAttribute("fill",color); m.setAttribute("stroke","#fff"); m.setAttribute("stroke-width","2");
+    m.setAttribute("vector-effect","non-scaling-stroke"); gRoute.appendChild(m); };
+  marker(routeStart, "#2ecc71"); marker(routeEnd, "#e74c3c");
+}
+function snapWalkable(walk, r, c){
+  const rows = walk.length, cols = walk[0].length;
+  const ok = (rr,cc)=> rr>=0 && cc>=0 && rr<rows && cc<cols && (walk[rr].charCodeAt(cc)-48) > 0;
+  if(ok(r,c)) return {r,c};
+  for(let rad=1; rad<=12; rad++)
+    for(let dr=-rad; dr<=rad; dr++) for(let dc=-rad; dc<=rad; dc++){
+      if(Math.max(Math.abs(dr),Math.abs(dc)) !== rad) continue;
+      if(ok(r+dr,c+dc)) return {r:r+dr, c:c+dc};
+    }
+  return null;
+}
+function astar(walk, start, goal){
+  const rows = walk.length, cols = walk[0].length, idx = (r,c)=> r*cols+c;
+  const cost = (r,c)=> walk[r].charCodeAt(c) - 48;       // 0 = blocked
+  const g = new Float64Array(rows*cols).fill(Infinity);
+  const came = new Int32Array(rows*cols).fill(-1);
+  const h = (r,c)=> Math.abs(r-goal.r) + Math.abs(c-goal.c);
+  const heapN = [], heapP = [];
+  const push = (node,pri)=>{ heapN.push(node); heapP.push(pri); let i=heapN.length-1;
+    while(i>0){ const p=(i-1)>>1; if(heapP[p]<=heapP[i]) break;
+      [heapP[p],heapP[i]]=[heapP[i],heapP[p]]; [heapN[p],heapN[i]]=[heapN[i],heapN[p]]; i=p; } };
+  const pop = ()=>{ const top=heapN[0], last=heapN.length-1;
+    heapN[0]=heapN[last]; heapP[0]=heapP[last]; heapN.pop(); heapP.pop();
+    let i=0; const L=heapN.length;
+    while(true){ let s=i, l=2*i+1, r=2*i+2;
+      if(l<L && heapP[l]<heapP[s]) s=l; if(r<L && heapP[r]<heapP[s]) s=r;
+      if(s===i) break; [heapP[s],heapP[i]]=[heapP[i],heapP[s]]; [heapN[s],heapN[i]]=[heapN[i],heapN[s]]; i=s; }
+    return top; };
+  const si = idx(start.r,start.c), gi = idx(goal.r,goal.c);
+  g[si] = 0; push(si, h(start.r,start.c));
+  const D = [[1,0],[-1,0],[0,1],[0,-1]];
+  while(heapN.length){
+    const cur = pop(), cr = (cur/cols)|0, cc = cur%cols;
+    if(cur === gi) break;
+    const gc = g[cur];
+    for(const d of D){
+      const nr = cr+d[0], nc = cc+d[1];
+      if(nr<0||nc<0||nr>=rows||nc>=cols) continue;
+      const w = cost(nr,nc); if(w<=0) continue;
+      const ng = gc + w, ni = idx(nr,nc);
+      if(ng < g[ni]){ g[ni]=ng; came[ni]=cur; push(ni, ng + h(nr,nc)); }
+    }
+  }
+  if(came[gi] === -1 && gi !== si) return null;
+  const path = []; let cur = gi;
+  while(cur !== -1){ path.push([(cur/cols)|0, cur%cols]); if(cur === si) break; cur = came[cur]; }
+  return path.reverse();
+}
+function computeRoute(){
+  const walk = WALK[currentZ];
+  if(!walk){ routePts=null; setHint("No routing data on this level."); return; }
+  const s = snapWalkable(walk, routeStart.r, routeStart.c);
+  const e = snapWalkable(walk, routeEnd.r, routeEnd.c);
+  if(!s || !e){ routePts=null; setHint("Pick spots on walkable ground."); return; }
+  routeStart = s; routeEnd = e;
+  const t0 = performance.now();
+  routePts = astar(walk, routeStart, routeEnd);
+  setHint(routePts ? ("Route: "+routePts.length+" tiles ("+Math.round(performance.now()-t0)+" ms) · click to reroute")
+                   : "No route found — blocked off.");
+}
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
@@ -237,6 +356,19 @@ viewer.addHandler("open", ()=>{
 });
 viewer.addHandler("update-viewport", scheduleAreaVis);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
+viewer.addHandler("canvas-click", function(e){
+  if(!routeMode || !e.quick || !META.grid) return;
+  const img = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position));
+  const tp = tilePx(), c = Math.floor(img.x/tp), r = Math.floor(img.y/tp);
+  if(r<0||c<0||r>=META.grid.rows||c>=META.grid.cols) return;
+  if(routeZ !== currentZ || !routeStart || (routeStart && routeEnd)){
+    routeStart = {r:r, c:c}; routeEnd = null; routePts = null; routeZ = currentZ;
+    setHint("Now click the destination.");
+  } else {
+    routeEnd = {r:r, c:c}; computeRoute();
+  }
+  drawRoute();
+});
 
 function buildButtons(){
   const wrap = document.getElementById("zbtns");
@@ -255,14 +387,23 @@ document.getElementById("keychk").onchange = e=>{ showKeys = e.target.checked;
   if(showKeys) renderKeyTable(document.getElementById("keysearch").value);
   renderOverlays(); updateAreaVis(); };
 document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value);
+document.getElementById("borderchk").onchange = e=>{ showBorders = e.target.checked; drawBorders(); };
+document.getElementById("routechk").onchange = e=>{ routeMode = e.target.checked;
+  document.getElementById("osd").style.cursor = routeMode ? "crosshair" : "";
+  if(routeMode){ setHint("Route mode: click a start point, then a destination."); }
+  else { routeStart=routeEnd=routePts=null; routeZ=null; drawRoute(); setHint(DEFAULT_HINT); } };
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
   fetch("pois.json").then(r=>r.json()).catch(()=>({})),
   fetch("areas.json").then(r=>r.json()).catch(()=>({})),
-  fetch("keys.json").then(r=>r.json()).catch(()=>({}))
-]).then(([meta, pois, areas, keys])=>{
-  META = meta; POIS = pois; AREAS = areas; KEYS = keys; keyIndex = buildKeyIndex(); buildButtons();
+  fetch("keys.json").then(r=>r.json()).catch(()=>({})),
+  fetch("borders.json").then(r=>r.json()).catch(()=>({})),
+  fetch("walk.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas, keys, borders, walk])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk;
+  DEFAULT_HINT = document.getElementById("hint").textContent;
+  keyIndex = buildKeyIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);

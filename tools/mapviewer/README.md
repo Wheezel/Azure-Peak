@@ -41,16 +41,20 @@ https://wheezel.github.io/Azure-Peak/classic/    <- the half-res /docs viewer
 Each run:
 1. builds **SpacemanDMM `dmm-tools`** (cached after the first run),
 2. renders one PNG per z-level (`dmm-tools … minimap`),
-3. runs `build.py` → WebP Deep-Zoom tiles + `pois.json` + `areas.json` + `meta.json`,
+3. runs `build.py` → WebP Deep-Zoom tiles + `pois.json` + `areas.json` +
+   `keys.json` + `borders.json` + `walk.json` + `meta.json`,
 4. uploads the `_site` folder and deploys it to Pages.
 
 **Viewer controls:** z-level buttons; a **pins** toggle (points of interest); an
-**areas** toggle — labels every area with its `.dmm` path (`town/manor`,
-`under/underdark`); and a **keys** toggle — labels every locked door with the
-**key that opens it** (e.g. 🔑 bishop's key, 🔑 dungeon key), parsed by matching
-each door's `lockid` to the `roguekey` definitions in `keys.dm`. Both label
-layers declutter by zoom: regions show zoomed out, individual doors/rooms appear
-as you zoom in.
+**areas** toggle (labels every area with its `.dmm` path); a **keys** toggle —
+labels every locked door with the **key that opens it** (🔑 bishop's key, etc.,
+by matching each door's `lockid` to the `roguekey` definitions in `keys.dm`),
+plus a searchable key table; a **borders** toggle — white outlines around every
+area/building (drawn from area boundaries, crisp at any zoom); and a **route**
+mode — click a start then a destination and it draws a **Google-Maps-style path**
+that prefers roads/paths over open ground and avoids walls/water (A* over a
+per-tile walk-cost grid derived from turf types). Routing is per-floor; the view
+is preserved when you switch z-levels so stairs line up.
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count
