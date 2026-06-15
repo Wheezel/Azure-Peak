@@ -1,0 +1,89 @@
+{
+ "1": [],
+ "2": [
+  {
+   "name": "Heartroot tree \u2014 rogue/druidsgrove",
+   "x": 11,
+   "y": 31,
+   "px": 168,
+   "py": 6712,
+   "type": "tree"
+  },
+  {
+   "name": "Heartroot tree \u2014 woods/southeast",
+   "x": 212,
+   "y": 306,
+   "px": 3384,
+   "py": 2312,
+   "type": "tree"
+  },
+  {
+   "name": "The House of the Ten (church)",
+   "x": 68,
+   "y": 76,
+   "px": 1080,
+   "py": 5992,
+   "type": "church"
+  },
+  {
+   "name": "Sacred Tree of Dendor",
+   "x": 28,
+   "y": 47,
+   "px": 440,
+   "py": 6456,
+   "type": "sacred"
+  },
+  {
+   "name": "The Inquisition (manor)",
+   "x": 19,
+   "y": 121,
+   "px": 296,
+   "py": 5272,
+   "type": "manor"
+  }
+ ],
+ "3": [
+  {
+   "name": "Mossmother (root hub) \u2014 bog/north",
+   "x": 52,
+   "y": 248,
+   "px": 824,
+   "py": 3240,
+   "type": "mother"
+  },
+  {
+   "name": "Heartroot tree \u2014 bog/south",
+   "x": 85,
+   "y": 169,
+   "px": 1352,
+   "py": 4504,
+   "type": "tree"
+  }
+ ],
+ "4": [
+  {
+   "name": "Heartroot tree \u2014 mountains/decap",
+   "x": 7,
+   "y": 354,
+   "px": 104,
+   "py": 1544,
+   "type": "tree"
+  },
+  {
+   "name": "Heartroot tree \u2014 rtfield/abandonedhotsprings",
+   "x": 83,
+   "y": 181,
+   "px": 1320,
+   "py": 4312,
+   "type": "tree"
+  },
+  {
+   "name": "Heartroot tree \u2014 forest/south",
+   "x": 186,
+   "y": 324,
+   "px": 2968,
+   "py": 2024,
+   "type": "tree"
+  }
+ ]
+}

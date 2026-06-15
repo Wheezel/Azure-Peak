@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure-Peak — dun_world Map (full sprites)</title>
+<style>
+  :root { --bg:#0e1014; --ink:#e7eef0; --accent:#7fd1a0; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:system-ui,Segoe UI,Roboto,sans-serif; overflow:hidden; }
+  #osd { position:absolute; inset:0; background:#000; }
+  #bar { position:absolute; top:10px; left:10px; z-index:10; display:flex; gap:8px;
+    align-items:center; flex-wrap:wrap; background:rgba(20,24,30,.85);
+    padding:8px 10px; border:1px solid #2c3540; border-radius:10px; backdrop-filter:blur(4px); }
+  #bar b { font-size:14px; margin-right:4px; }
+  .zbtn { cursor:pointer; border:1px solid #3a4654; background:#222a33; color:var(--ink);
+    padding:5px 11px; border-radius:7px; font-size:13px; }
+  .zbtn.active { background:var(--accent); color:#06140c; border-color:var(--accent); font-weight:600; }
+  .toggle { cursor:pointer; user-select:none; font-size:13px; display:flex; gap:5px; align-items:center; }
+  .arealbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
+    background:rgba(8,12,10,.8); border:1px solid #3c5a40; color:#cfe8d4;
+    font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
+  .keypin { transform:translate(-50%,-50%); pointer-events:none; position:relative; }
+  .kdot { display:block; width:7px; height:7px; border-radius:50%;
+    border:1.5px solid rgba(0,0,0,.6); box-shadow:0 0 0 1px rgba(0,0,0,.45); }
+  .klbl { position:absolute; left:9px; top:50%; transform:translateY(-50%); white-space:nowrap;
+    background:rgba(16,13,6,.9); border:1px solid; line-height:1.2;
+    font-size:11px; padding:1px 5px; border-radius:5px; }
+  #poilist { position:absolute; top:10px; right:10px; z-index:10; width:230px; max-height:80%;
+    overflow:auto; background:rgba(20,24,30,.85); border:1px solid #2c3540; border-radius:10px;
+    padding:8px 10px; font-size:12.5px; backdrop-filter:blur(4px); }
+  #poilist h4 { margin:2px 0 7px; font-size:12px; color:#9fb3c0; text-transform:uppercase; letter-spacing:.5px; }
+  .poiitem { cursor:pointer; padding:4px 6px; border-radius:6px; display:flex; gap:7px; align-items:center; }
+  .poiitem:hover { background:#222c36; }
+  .dot { width:11px; height:11px; border-radius:50%; flex:0 0 auto; border:1.5px solid #0008; }
+  .pin { width:14px; height:14px; border-radius:50%; border:2px solid #fff; transform:translate(-50%,-50%);
+    box-shadow:0 0 0 1px #000a, 0 0 7px #000a; cursor:pointer; position:relative; }
+  .pin .lbl { position:absolute; left:16px; top:50%; transform:translateY(-50%); white-space:nowrap;
+    background:rgba(10,14,12,.9); border:1px solid #3c5a40; padding:2px 7px; border-radius:6px;
+    font-size:12px; color:#eaf5ea; opacity:0; transition:opacity .12s; pointer-events:none; }
+  .t-tree{background:#4aa3df} .t-mother{background:#f1c40f} .t-church{background:#ffe169}
+  .t-sacred{background:#2ecc71} .t-manor{background:#c0392b}
+  #hint { position:absolute; bottom:8px; left:10px; z-index:10; font-size:11.5px; color:#7d8a96;
+    background:rgba(20,24,30,.7); padding:4px 8px; border-radius:6px; }
+  #credit { position:absolute; bottom:8px; right:10px; z-index:10; font-size:11px; color:#5d6b76;
+    background:rgba(20,24,30,.7); padding:4px 8px; border-radius:6px; }
+  #err { position:absolute; bottom:34px; left:10px; z-index:20; max-width:80%; display:none;
+    color:#ffb3b3; background:rgba(40,10,10,.92); border:1px solid #a33; border-radius:8px;
+    padding:6px 10px; font-size:12px; white-space:pre-wrap; }
+  #keypanel { position:absolute; top:58px; left:10px; z-index:11; width:264px; max-height:74%;
+    display:none; flex-direction:column; background:rgba(20,24,30,.92); border:1px solid #2c3540;
+    border-radius:10px; padding:8px 10px; backdrop-filter:blur(4px); }
+  #keypanel h4 { margin:2px 0 6px; font-size:12px; color:#9fb3c0; text-transform:uppercase; letter-spacing:.5px; }
+  #keysearch { width:100%; box-sizing:border-box; margin-bottom:6px; padding:5px 8px; border-radius:6px;
+    border:1px solid #3a4654; background:#161b21; color:#e7eef0; font-size:13px; }
+  #keytable { overflow:auto; }
+  .keyrow { display:grid; grid-template-columns:14px 1fr auto; gap:8px; align-items:center;
+    padding:3px 5px; border-radius:6px; cursor:pointer; font-size:12.5px; }
+  .keyrow:hover { background:#222c36; }
+  .kswatch { width:12px; height:12px; border-radius:3px; border:1px solid #0007; }
+  .kname i { color:#9fb6c6; }
+  .kcount { color:#9fb3c0; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+<div id="osd"></div>
+<div id="err"></div>
+<div id="bar"><b>dun_world</b><span id="zbtns"></span>
+  <label class="toggle"><input type="checkbox" id="pinchk" checked> pins</label>
+  <label class="toggle"><input type="checkbox" id="areachk"> areas</label>
+  <label class="toggle"><input type="checkbox" id="keychk"> keys</label></div>
+<div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
+<div id="keypanel">
+  <h4>Keys <span id="keycount"></span></h4>
+  <input id="keysearch" type="text" placeholder="search key or lockid…" autocomplete="off">
+  <div id="keytable"></div>
+</div>
+<div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
+<div id="credit">full sprite render</div>
+
+<script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
+<script>
+const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
+let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
+let showPins = true, showAreas = false, showKeys = false, labelEls = [];
+let keyIndex = [], _keyCycle = {}, pendingView = null;
+
+const viewer = OpenSeadragon({
+  id: "osd", prefixUrl: OSD_IMG,
+  showNavigator: true, navigatorPosition: "BOTTOM_RIGHT", navigatorHeight: 150, navigatorWidth: 90,
+  minZoomImageRatio: 0.5, maxZoomPixelRatio: 2.5,
+  gestureSettingsMouse: { clickToZoom:false }, showRotationControl: false,
+  zoomPerScroll: 1.4, animationTime: 0.7
+});
+
+function showErr(m){ const e=document.getElementById("err"); e.style.display="block";
+  e.textContent=(e.textContent? e.textContent+"\n":"")+m; }
+window.addEventListener("error", e=>showErr("JS error: "+(e.message||"?")));
+
+// Stable per-key colour: same lockid -> same hue, so matching doors share a colour.
+function keyColor(id){ let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))%360; return "hsl("+h+",72%,58%)"; }
+
+// OpenSeadragon won't read a WEBP .dzi, so we supply a custom tile source.
+function tileSourceFor(z){
+  const [w,h] = META.dims[z];
+  return { width:w, height:h, tileSize:META.tile, tileOverlap:META.overlap,
+    minLevel:0, maxLevel: Math.ceil(Math.log2(Math.max(w,h))),
+    getTileUrl: (level,x,y)=> "dun_world-z"+z+"_files/"+level+"/"+x+"_"+y+".webp" };
+}
+
+// (re)build all overlays for the current level: POI pins + area-name labels.
+function renderOverlays(){
+  viewer.clearOverlays(); labelEls = [];
+  const items = document.getElementById("poiitems"); items.innerHTML = "";
+  const list = POIS[currentZ] || [];
+  if(!list.length) items.innerHTML = "<div style='color:#7d8a96'>none on this level</div>";
+  list.forEach(p=>{
+    const row = document.createElement("div"); row.className="poiitem";
+    row.innerHTML = `<span class="dot t-${p.type}"></span><span>${p.name}</span>`;
+    row.onclick = ()=>flyTo(p); items.appendChild(row);
+    if(showPins){
+      try {
+        const el = document.createElement("div"); el.className = "pin t-"+p.type;
+        el.innerHTML = `<span class="lbl">${p.name} (${p.x},${p.y})</span>`;
+        el.onclick = ()=>flyTo(p);
+        viewer.addOverlay({ element: el,
+          location: viewer.viewport.imageToViewportCoordinates(p.px, p.py),
+          placement: OpenSeadragon.Placement.CENTER });
+      } catch(ex){ showErr("overlay: "+ex.message); }
+    }
+  });
+  function addLabel(cls, text, px, py, w, thr){
+    try {
+      const el = document.createElement("div"); el.className = cls; el.textContent = text;
+      el.style.display = "none";
+      viewer.addOverlay({ element: el,
+        location: viewer.viewport.imageToViewportCoordinates(px, py),
+        placement: OpenSeadragon.Placement.CENTER });
+      labelEls.push({ el: el, px: px, w: w, thr: thr });
+    } catch(ex){ showErr("label: "+ex.message); }
+  }
+  if(showAreas)
+    (AREAS[currentZ] || []).forEach(a=> addLabel("arealbl", a.name, a.px, a.py, a.w||32, 55));
+  if(showKeys)
+    (KEYS[currentZ] || []).forEach(k=>{
+      try {
+        const color = keyColor(k.lockid);
+        const wrap = document.createElement("div"); wrap.className = "keypin";
+        const dot = document.createElement("span"); dot.className = "kdot"; dot.style.background = color;
+        const lbl = document.createElement("span"); lbl.className = "klbl"; lbl.style.display = "none";
+        lbl.textContent = k.key || k.lockid; lbl.style.color = color; lbl.style.borderColor = color;
+        wrap.appendChild(dot); wrap.appendChild(lbl);
+        viewer.addOverlay({ element: wrap,
+          location: viewer.viewport.imageToViewportCoordinates(k.px, k.py),
+          placement: OpenSeadragon.Placement.CENTER });
+        labelEls.push({ el: lbl, px: k.px, w: 32, thr: 24 });
+      } catch(ex){ showErr("key: "+ex.message); }
+    });
+}
+
+// Declutter: show a label once its feature is big enough on screen — region/key
+// names appear as you zoom in, so it never becomes a wall of text.
+function updateAreaVis(){
+  if(!labelEls.length || !viewer.viewport) return;
+  const Pt = OpenSeadragon.Point;
+  for(const it of labelEls){
+    const p1 = viewer.viewport.imageToViewerElementCoordinates(new Pt(it.px - it.w/2, 0));
+    const p2 = viewer.viewport.imageToViewerElementCoordinates(new Pt(it.px + it.w/2, 0));
+    it.el.style.display = (Math.abs(p2.x - p1.x) >= it.thr) ? "block" : "none";
+  }
+}
+let _rafVis = null;
+function scheduleAreaVis(){ if(_rafVis) return; _rafVis = requestAnimationFrame(()=>{ _rafVis=null; updateAreaVis(); }); }
+function flyTo(p){
+  viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
+  viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
+}
+function loadZ(z){
+  // remember where we're looking so switching floors keeps the same spot in view
+  // (all z-levels share the same dimensions/grid, so x,y lines up — handy for stairs)
+  if(viewer.world.getItemCount() > 0)
+    pendingView = { center: viewer.viewport.getCenter(), zoom: viewer.viewport.getZoom() };
+  currentZ = String(z);
+  document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", b.dataset.z===currentZ));
+  viewer.open(tileSourceFor(currentZ));
+}
+
+// ---- Keys table + search ----
+function buildKeyIndex(){
+  const idx = {};
+  for(const z in KEYS) for(const d of KEYS[z]){
+    const e = idx[d.lockid] || (idx[d.lockid] = { lockid:d.lockid, key:d.key, count:0, byz:{} });
+    (e.byz[z] = e.byz[z] || []).push(d); e.count++;
+    if(d.key && !e.key) e.key = d.key;
+  }
+  return Object.values(idx).sort((a,b)=> b.count - a.count || a.lockid.localeCompare(b.lockid));
+}
+function renderKeyTable(filter){
+  filter = (filter||"").toLowerCase().trim();
+  const tbl = document.getElementById("keytable"); tbl.innerHTML = "";
+  let shown = 0;
+  for(const e of keyIndex){
+    const label = (e.key || e.lockid).toLowerCase();
+    if(filter && !label.includes(filter) && !e.lockid.toLowerCase().includes(filter)) continue;
+    shown++;
+    const row = document.createElement("div"); row.className = "keyrow"; row.title = "lockid: " + e.lockid;
+    row.innerHTML = `<span class="kswatch" style="background:${keyColor(e.lockid)}"></span>`
+      + `<span class="kname">${e.key ? e.key : "<i>"+e.lockid+"</i>"}</span>`
+      + `<span class="kcount">${e.count}</span>`;
+    row.onclick = ()=> gotoKey(e.lockid);
+    tbl.appendChild(row);
+  }
+  document.getElementById("keycount").textContent = "(" + shown + ")";
+}
+function gotoKey(lockid){
+  const e = keyIndex.find(x=>x.lockid===lockid); if(!e) return;
+  const c = document.getElementById("keychk");
+  if(!c.checked){ c.checked = true; showKeys = true; document.getElementById("keypanel").style.display = "flex"; }
+  let z = e.byz[currentZ] ? currentZ : Object.keys(e.byz)[0];
+  const doors = e.byz[z];
+  const i = ((_keyCycle[lockid] ?? -1) + 1) % doors.length; _keyCycle[lockid] = i;
+  const d = doors[i];
+  const fly = ()=>{ viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(d.px, d.py));
+    viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 5)); };
+  if(String(z) !== String(currentZ)){ loadZ(+z); viewer.addOnceHandler("open", fly); }
+  else { renderOverlays(); updateAreaVis(); fly(); }
+}
+viewer.addHandler("open", ()=>{
+  if(pendingView){
+    viewer.viewport.zoomTo(pendingView.zoom, null, true);
+    viewer.viewport.panTo(pendingView.center, true);
+    pendingView = null;
+  }
+  try{ renderOverlays(); }catch(ex){ showErr("overlays: "+ex.message); }
+  updateAreaVis();
+});
+viewer.addHandler("update-viewport", scheduleAreaVis);
+viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
+
+function buildButtons(){
+  const wrap = document.getElementById("zbtns");
+  META.levels.forEach(z=>{
+    const b = document.createElement("span");
+    b.className="zbtn"; b.dataset.z=String(z);
+    b.textContent = "z"+z+(META.names[z] ? " · "+META.names[z] : "");
+    b.onclick = ()=>loadZ(z); wrap.appendChild(b);
+  });
+}
+
+document.getElementById("pinchk").onchange = e=>{ showPins = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("areachk").onchange = e=>{ showAreas = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("keychk").onchange = e=>{ showKeys = e.target.checked;
+  document.getElementById("keypanel").style.display = showKeys ? "flex" : "none";
+  if(showKeys) renderKeyTable(document.getElementById("keysearch").value);
+  renderOverlays(); updateAreaVis(); };
+document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value);
+
+Promise.all([
+  fetch("meta.json").then(r=>r.json()),
+  fetch("pois.json").then(r=>r.json()).catch(()=>({})),
+  fetch("areas.json").then(r=>r.json()).catch(()=>({})),
+  fetch("keys.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas, keys])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; keyIndex = buildKeyIndex(); buildButtons();
+  if(meta.generated) document.getElementById("credit").textContent =
+    "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
+  loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);
+}).catch(e=>showErr("Could not load meta.json — was the site built by the workflow? ("+e.message+")"));
+</script>
+</body>
+</html>

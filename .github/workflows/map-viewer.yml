@@ -1,0 +1,87 @@
+name: Build & deploy map viewer
+
+# Re-renders the dun_world map to full-resolution sprite tiles and publishes the
+# interactive viewer to GitHub Pages. Runs automatically whenever the map (or the
+# viewer tooling) changes, so the published map always matches the repo.
+
+on:
+  push:
+    branches: [main, claude/busy-ride-t7x4nv]
+    paths:
+      - '_maps/map_files/dun_world/dun_world.dmm'
+      - 'icons/**'
+      - 'tools/mapviewer/**'
+      - '.github/workflows/map-viewer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dmm-tools binary
+        id: cache-dmm
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/dmm-tools
+          key: dmm-tools-cli-${{ runner.os }}-v1
+
+      - name: Build dmm-tools (SpacemanDMM)
+        if: steps.cache-dmm.outputs.cache-hit != 'true'
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+        run: cargo install --git https://github.com/SpaceManiac/SpacemanDMM.git dmm-tools-cli
+
+      - name: Render minimaps (one PNG per z-level, 32 px/tile)
+        run: |
+          mkdir -p build/renders
+          dmm-tools -e roguetown.dme minimap -o build/renders _maps/map_files/dun_world/dun_world.dmm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Pillow
+        run: pip install --quiet pillow
+
+      - name: Build viewer site (tiles + POIs + metadata)
+        run: |
+          python tools/mapviewer/build.py \
+            --renders build/renders \
+            --map _maps/map_files/dun_world/dun_world.dmm \
+            --out _site \
+            --classic docs/map-viewer
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
