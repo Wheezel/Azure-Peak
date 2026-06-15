@@ -1,0 +1,5 @@
+author: "Wheezel"
+delete-after: True
+changes:
+  - rscadd: "Added comprehensive Inquisition faction guide covering roles, mechanics, equipment, and lore"
+  - rscadd: "Added interactive dun_world map viewer with four z-levels and points of interest"
