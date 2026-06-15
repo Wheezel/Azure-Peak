@@ -84,7 +84,7 @@
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
 let showPins = true, showAreas = false, showKeys = false, labelEls = [];
-let keyIndex = [], _keyCycle = {};
+let keyIndex = [], _keyCycle = {}, pendingView = null;
 
 const viewer = OpenSeadragon({
   id: "osd", prefixUrl: OSD_IMG,
@@ -177,6 +177,10 @@ function flyTo(p){
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
 }
 function loadZ(z){
+  // remember where we're looking so switching floors keeps the same spot in view
+  // (all z-levels share the same dimensions/grid, so x,y lines up — handy for stairs)
+  if(viewer.world.getItemCount() > 0)
+    pendingView = { center: viewer.viewport.getCenter(), zoom: viewer.viewport.getZoom() };
   currentZ = String(z);
   document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", b.dataset.z===currentZ));
   viewer.open(tileSourceFor(currentZ));
@@ -222,7 +226,15 @@ function gotoKey(lockid){
   if(String(z) !== String(currentZ)){ loadZ(+z); viewer.addOnceHandler("open", fly); }
   else { renderOverlays(); updateAreaVis(); fly(); }
 }
-viewer.addHandler("open", ()=>{ try{ renderOverlays(); }catch(ex){ showErr("overlays: "+ex.message); } updateAreaVis(); });
+viewer.addHandler("open", ()=>{
+  if(pendingView){
+    viewer.viewport.zoomTo(pendingView.zoom, null, true);
+    viewer.viewport.panTo(pendingView.center, true);
+    pendingView = null;
+  }
+  try{ renderOverlays(); }catch(ex){ showErr("overlays: "+ex.message); }
+  updateAreaVis();
+});
 viewer.addHandler("update-viewport", scheduleAreaVis);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
 
