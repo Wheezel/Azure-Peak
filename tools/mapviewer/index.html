@@ -48,6 +48,19 @@
   #err { position:absolute; bottom:34px; left:10px; z-index:20; max-width:80%; display:none;
     color:#ffb3b3; background:rgba(40,10,10,.92); border:1px solid #a33; border-radius:8px;
     padding:6px 10px; font-size:12px; white-space:pre-wrap; }
+  #keypanel { position:absolute; top:58px; left:10px; z-index:11; width:264px; max-height:74%;
+    display:none; flex-direction:column; background:rgba(20,24,30,.92); border:1px solid #2c3540;
+    border-radius:10px; padding:8px 10px; backdrop-filter:blur(4px); }
+  #keypanel h4 { margin:2px 0 6px; font-size:12px; color:#9fb3c0; text-transform:uppercase; letter-spacing:.5px; }
+  #keysearch { width:100%; box-sizing:border-box; margin-bottom:6px; padding:5px 8px; border-radius:6px;
+    border:1px solid #3a4654; background:#161b21; color:#e7eef0; font-size:13px; }
+  #keytable { overflow:auto; }
+  .keyrow { display:grid; grid-template-columns:14px 1fr auto; gap:8px; align-items:center;
+    padding:3px 5px; border-radius:6px; cursor:pointer; font-size:12.5px; }
+  .keyrow:hover { background:#222c36; }
+  .kswatch { width:12px; height:12px; border-radius:3px; border:1px solid #0007; }
+  .kname i { color:#9fb6c6; }
+  .kcount { color:#9fb3c0; font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
@@ -58,6 +71,11 @@
   <label class="toggle"><input type="checkbox" id="areachk"> areas</label>
   <label class="toggle"><input type="checkbox" id="keychk"> keys</label></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
+<div id="keypanel">
+  <h4>Keys <span id="keycount"></span></h4>
+  <input id="keysearch" type="text" placeholder="search key or lockid…" autocomplete="off">
+  <div id="keytable"></div>
+</div>
 <div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
 <div id="credit">full sprite render</div>
 
@@ -66,6 +84,7 @@
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
 let showPins = true, showAreas = false, showKeys = false, labelEls = [];
+let keyIndex = [], _keyCycle = {};
 
 const viewer = OpenSeadragon({
   id: "osd", prefixUrl: OSD_IMG,
@@ -162,6 +181,47 @@ function loadZ(z){
   document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", b.dataset.z===currentZ));
   viewer.open(tileSourceFor(currentZ));
 }
+
+// ---- Keys table + search ----
+function buildKeyIndex(){
+  const idx = {};
+  for(const z in KEYS) for(const d of KEYS[z]){
+    const e = idx[d.lockid] || (idx[d.lockid] = { lockid:d.lockid, key:d.key, count:0, byz:{} });
+    (e.byz[z] = e.byz[z] || []).push(d); e.count++;
+    if(d.key && !e.key) e.key = d.key;
+  }
+  return Object.values(idx).sort((a,b)=> b.count - a.count || a.lockid.localeCompare(b.lockid));
+}
+function renderKeyTable(filter){
+  filter = (filter||"").toLowerCase().trim();
+  const tbl = document.getElementById("keytable"); tbl.innerHTML = "";
+  let shown = 0;
+  for(const e of keyIndex){
+    const label = (e.key || e.lockid).toLowerCase();
+    if(filter && !label.includes(filter) && !e.lockid.toLowerCase().includes(filter)) continue;
+    shown++;
+    const row = document.createElement("div"); row.className = "keyrow"; row.title = "lockid: " + e.lockid;
+    row.innerHTML = `<span class="kswatch" style="background:${keyColor(e.lockid)}"></span>`
+      + `<span class="kname">${e.key ? e.key : "<i>"+e.lockid+"</i>"}</span>`
+      + `<span class="kcount">${e.count}</span>`;
+    row.onclick = ()=> gotoKey(e.lockid);
+    tbl.appendChild(row);
+  }
+  document.getElementById("keycount").textContent = "(" + shown + ")";
+}
+function gotoKey(lockid){
+  const e = keyIndex.find(x=>x.lockid===lockid); if(!e) return;
+  const c = document.getElementById("keychk");
+  if(!c.checked){ c.checked = true; showKeys = true; document.getElementById("keypanel").style.display = "flex"; }
+  let z = e.byz[currentZ] ? currentZ : Object.keys(e.byz)[0];
+  const doors = e.byz[z];
+  const i = ((_keyCycle[lockid] ?? -1) + 1) % doors.length; _keyCycle[lockid] = i;
+  const d = doors[i];
+  const fly = ()=>{ viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(d.px, d.py));
+    viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 5)); };
+  if(String(z) !== String(currentZ)){ loadZ(+z); viewer.addOnceHandler("open", fly); }
+  else { renderOverlays(); updateAreaVis(); fly(); }
+}
 viewer.addHandler("open", ()=>{ try{ renderOverlays(); }catch(ex){ showErr("overlays: "+ex.message); } updateAreaVis(); });
 viewer.addHandler("update-viewport", scheduleAreaVis);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
@@ -178,7 +238,11 @@ function buildButtons(){
 
 document.getElementById("pinchk").onchange = e=>{ showPins = e.target.checked; renderOverlays(); updateAreaVis(); };
 document.getElementById("areachk").onchange = e=>{ showAreas = e.target.checked; renderOverlays(); updateAreaVis(); };
-document.getElementById("keychk").onchange = e=>{ showKeys = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("keychk").onchange = e=>{ showKeys = e.target.checked;
+  document.getElementById("keypanel").style.display = showKeys ? "flex" : "none";
+  if(showKeys) renderKeyTable(document.getElementById("keysearch").value);
+  renderOverlays(); updateAreaVis(); };
+document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value);
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
@@ -186,7 +250,7 @@ Promise.all([
   fetch("areas.json").then(r=>r.json()).catch(()=>({})),
   fetch("keys.json").then(r=>r.json()).catch(()=>({}))
 ]).then(([meta, pois, areas, keys])=>{
-  META = meta; POIS = pois; AREAS = areas; KEYS = keys; buildButtons();
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; keyIndex = buildKeyIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);
