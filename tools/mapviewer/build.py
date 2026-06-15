@@ -40,7 +40,7 @@ def parse_map(path):
     gridstart = re.search(r'^\(\d+,\d+,\d+\) = \{"', txt, re.M).start()
     dtxt = txt[:gridstart]
     entry = re.compile(r'^"([a-zA-Z]+)" = \((.*?)\)\s*$', re.S | re.M)
-    key_area, key_flags, key_locks, key_cost = {}, {}, {}, {}
+    key_area, key_flags, key_locks, key_cost, key_portal = {}, {}, {}, {}, {}
     for m in entry.finditer(dtxt):
         k, body = m.group(1), m.group(2)
         ar = re.findall(r'/area/[A-Za-z0-9_/]+', body)
@@ -49,6 +49,7 @@ def parse_map(path):
         if locks: key_locks[k] = locks
         tu = re.findall(r'/turf/[A-Za-z0-9_/]+', body)
         key_cost[k] = turf_cost(tu[-1] if tu else "")
+        key_portal[k] = ("/obj/structure/stairs" in body) or ("/obj/structure/ladder" in body)
         key_flags[k] = {
             "mother": "/obj/structure/roguemachine/mossmother/travel" not in body
                        and "/obj/structure/roguemachine/mossmother" in body,
@@ -61,6 +62,7 @@ def parse_map(path):
     lock_pts = defaultdict(list)         # lockid -> [(x,y,z)]
     tile_area = defaultdict(dict)        # z -> {(row,col): area_id}  (row 0 = north/top)
     tile_cost = defaultdict(dict)        # z -> {(row,col): walk_cost}
+    portal_pts = defaultdict(list)       # z -> [(row,col)]  stairs/ladders (floor links)
     area_ids = {}
     maxx = maxy = 0
     for b in block.finditer(txt):
@@ -77,13 +79,14 @@ def parse_map(path):
                 tile_area[z][(i, col)] = aid
             cost = key_cost.get(key, 0)
             if cost: tile_cost[z][(i, col)] = cost
+            if key_portal.get(key): portal_pts[z].append((i, col))
             for lid in key_locks.get(key, ()):
                 lock_pts[lid].append((x, y, z))
             fl = key_flags.get(key)
             if fl:
                 for name, on in fl.items():
                     if on: flagged[name].append((x, y, z))
-    return flagged, area_pts, lock_pts, tile_area, tile_cost, maxx, maxy
+    return flagged, area_pts, lock_pts, tile_area, tile_cost, portal_pts, maxx, maxy
 
 def centroid(area_pts, area):
     by_z = area_pts.get(area)
@@ -191,6 +194,11 @@ def build_walk(tile_cost, maxx, maxy):
         out[str(z)] = ["".join(str(grid.get((i, c), 0)) for c in range(maxx)) for i in range(maxy)]
     return out
 
+def build_portals(portal_pts):
+    """Per z-level stair/ladder tiles [[row,col],...] — the floor-to-floor links
+    used by cross-floor routing."""
+    return {str(z): sorted(set(map(tuple, rc))) for z, rc in portal_pts.items()}
+
 # ---------------------------------------------------------------- dzi tiling
 def make_dzi(src, base, out, tile, overlap, quality, max_width=None):
     im = Image.open(src).convert("RGB")
@@ -233,7 +241,7 @@ def main():
     if not renders:
         sys.exit(f"no renders found in {args.renders}")
 
-    flagged, area_pts, lock_pts, tile_area, tile_cost, maxx, maxy = parse_map(args.map)
+    flagged, area_pts, lock_pts, tile_area, tile_cost, portal_pts, maxx, maxy = parse_map(args.map)
     lockmap = parse_keys(args.keys)
 
     dims = {}
@@ -265,6 +273,8 @@ def main():
               open(os.path.join(args.out, "borders.json"), "w"), separators=(",", ":"))
     json.dump(build_walk(tile_cost, maxx, maxy),
               open(os.path.join(args.out, "walk.json"), "w"), separators=(",", ":"))
+    json.dump(build_portals(portal_pts),
+              open(os.path.join(args.out, "portals.json"), "w"), separators=(",", ":"))
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
     open(os.path.join(args.out, ".nojekyll"), "w").close()
     if args.classic and os.path.isdir(args.classic):

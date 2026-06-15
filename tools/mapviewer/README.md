@@ -53,8 +53,11 @@ plus a searchable key table; a **borders** toggle — white outlines around ever
 area/building (drawn from area boundaries, crisp at any zoom); and a **route**
 mode — click a start then a destination and it draws a **Google-Maps-style path**
 that prefers roads/paths over open ground and avoids walls/water (A* over a
-per-tile walk-cost grid derived from turf types). Routing is per-floor; the view
-is preserved when you switch z-levels so stairs line up.
+per-tile walk-cost grid derived from turf types), with a **clear route** button.
+Routing is **cross-floor**: stairs/ladders are extracted as floor links
+(`portals.json`), so a path can go up/down levels — it draws the portion on the
+current floor and drops **↑/↓ markers** where it changes z; since the view is
+preserved across z-switches, you just follow the markers between floors.
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count

@@ -71,7 +71,8 @@
   <label class="toggle"><input type="checkbox" id="areachk"> areas</label>
   <label class="toggle"><input type="checkbox" id="borderchk"> borders</label>
   <label class="toggle"><input type="checkbox" id="keychk"> keys</label>
-  <label class="toggle"><input type="checkbox" id="routechk"> route</label></div>
+  <label class="toggle"><input type="checkbox" id="routechk"> route</label>
+  <span class="zbtn" id="clearroute">clear route</span></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="keypanel">
   <h4>Keys <span id="keycount"></span></h4>
@@ -87,9 +88,9 @@ const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/opensead
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
 let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
-let BORDERS = {}, WALK = {}, showBorders = false, routeMode = false;
+let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, showBorders = false, routeMode = false;
 let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
-let routeStart = null, routeEnd = null, routePts = null, routeZ = null;
+let routeStart = null, routeEnd = null, routePts = null;
 const SVGNS = "http://www.w3.org/2000/svg";
 
 const viewer = OpenSeadragon({
@@ -211,25 +212,52 @@ function tilePx(){ return META.dims[currentZ][0] / META.grid.cols; }
 function drawRoute(){
   if(!gRoute) return;
   gRoute.textContent = "";
-  if(routeZ !== currentZ) return;
   const tp = tilePx(), ctr = (r,c)=>[ (c+0.5)*tp, (r+0.5)*tp ];
   if(routePts && routePts.length){
-    let d = "";
-    routePts.forEach((p,i)=>{ const xy = ctr(p[0],p[1]); d += (i?"L":"M")+xy[0].toFixed(1)+" "+xy[1].toFixed(1); });
-    for(const [col,w] of [["#06203a","7"],["#3da5ff","3.5"]]){
-      const ln = document.createElementNS(SVGNS,"path");
-      ln.setAttribute("d",d); ln.setAttribute("fill","none"); ln.setAttribute("stroke",col);
-      ln.setAttribute("stroke-width",w); ln.setAttribute("stroke-linejoin","round");
-      ln.setAttribute("stroke-linecap","round"); ln.setAttribute("vector-effect","non-scaling-stroke");
-      gRoute.appendChild(ln);
+    // draw the contiguous portions of the path that lie on the current floor
+    let run = null; const runs = [];
+    for(const p of routePts){
+      if(String(p[0]) === String(currentZ)){ if(!run){ run = []; runs.push(run); } run.push(p); }
+      else run = null;
+    }
+    for(const seg of runs){
+      let d = "";
+      seg.forEach((p,i)=>{ const xy = ctr(p[1],p[2]); d += (i?"L":"M")+xy[0].toFixed(1)+" "+xy[1].toFixed(1); });
+      for(const cw of [["#06203a","7"],["#3da5ff","3.5"]]){
+        const ln = document.createElementNS(SVGNS,"path");
+        ln.setAttribute("d",d); ln.setAttribute("fill","none"); ln.setAttribute("stroke",cw[0]);
+        ln.setAttribute("stroke-width",cw[1]); ln.setAttribute("stroke-linejoin","round");
+        ln.setAttribute("stroke-linecap","round"); ln.setAttribute("vector-effect","non-scaling-stroke");
+        gRoute.appendChild(ln);
+      }
+    }
+    // ↑/↓ markers where the route changes floors
+    for(let i=0; i<routePts.length-1; i++){
+      const a = routePts[i], b2 = routePts[i+1];
+      if(String(a[0]) === String(b2[0])) continue;
+      const up = META.levels.indexOf(+b2[0]) > META.levels.indexOf(+a[0]);
+      if(String(a[0]) === String(currentZ))  addZMarker(a[1], a[2], (up?"↑ z":"↓ z")+b2[0]);
+      if(String(b2[0]) === String(currentZ)) addZMarker(b2[1], b2[2], (up?"↑ from z":"↓ from z")+a[0]);
     }
   }
-  const marker = (t,color)=>{ if(!t) return; const xy = ctr(t.r,t.c);
+  const marker = (t,color)=>{ if(!t || String(t.z)!==String(currentZ)) return; const xy = ctr(t.r,t.c);
     const m = document.createElementNS(SVGNS,"circle");
     m.setAttribute("cx",xy[0]); m.setAttribute("cy",xy[1]); m.setAttribute("r","46");
     m.setAttribute("fill",color); m.setAttribute("stroke","#fff"); m.setAttribute("stroke-width","2");
     m.setAttribute("vector-effect","non-scaling-stroke"); gRoute.appendChild(m); };
   marker(routeStart, "#2ecc71"); marker(routeEnd, "#e74c3c");
+}
+function addZMarker(r, c, label){
+  const tp = tilePx(), x = (c+0.5)*tp, y = (r+0.5)*tp;
+  const circ = document.createElementNS(SVGNS,"circle");
+  circ.setAttribute("cx",x); circ.setAttribute("cy",y); circ.setAttribute("r","30");
+  circ.setAttribute("fill","#ffcf33"); circ.setAttribute("stroke","#06203a");
+  circ.setAttribute("stroke-width","2"); circ.setAttribute("vector-effect","non-scaling-stroke"); gRoute.appendChild(circ);
+  const tx = document.createElementNS(SVGNS,"text");
+  tx.setAttribute("x",x); tx.setAttribute("y",y-46); tx.setAttribute("text-anchor","middle");
+  tx.setAttribute("fill","#fff"); tx.setAttribute("font-size","56"); tx.setAttribute("font-weight","bold");
+  tx.setAttribute("paint-order","stroke"); tx.setAttribute("stroke","#06203a"); tx.setAttribute("stroke-width","8");
+  tx.textContent = label; gRoute.appendChild(tx);
 }
 function snapWalkable(walk, r, c){
   const rows = walk.length, cols = walk[0].length;
@@ -242,54 +270,74 @@ function snapWalkable(walk, r, c){
     }
   return null;
 }
-function astar(walk, start, goal){
-  const rows = walk.length, cols = walk[0].length, idx = (r,c)=> r*cols+c;
-  const cost = (r,c)=> walk[r].charCodeAt(c) - 48;       // 0 = blocked
-  const g = new Float64Array(rows*cols).fill(Infinity);
-  const came = new Int32Array(rows*cols).fill(-1);
-  const h = (r,c)=> Math.abs(r-goal.r) + Math.abs(c-goal.c);
-  const heapN = [], heapP = [];
-  const push = (node,pri)=>{ heapN.push(node); heapP.push(pri); let i=heapN.length-1;
-    while(i>0){ const p=(i-1)>>1; if(heapP[p]<=heapP[i]) break;
-      [heapP[p],heapP[i]]=[heapP[i],heapP[p]]; [heapN[p],heapN[i]]=[heapN[i],heapN[p]]; i=p; } };
-  const pop = ()=>{ const top=heapN[0], last=heapN.length-1;
-    heapN[0]=heapN[last]; heapP[0]=heapP[last]; heapN.pop(); heapP.pop();
-    let i=0; const L=heapN.length;
-    while(true){ let s=i, l=2*i+1, r=2*i+2;
-      if(l<L && heapP[l]<heapP[s]) s=l; if(r<L && heapP[r]<heapP[s]) s=r;
-      if(s===i) break; [heapP[s],heapP[i]]=[heapP[i],heapP[s]]; [heapN[s],heapN[i]]=[heapN[i],heapN[s]]; i=s; }
-    return top; };
-  const si = idx(start.r,start.c), gi = idx(goal.r,goal.c);
-  g[si] = 0; push(si, h(start.r,start.c));
-  const D = [[1,0],[-1,0],[0,1],[0,-1]];
-  while(heapN.length){
-    const cur = pop(), cr = (cur/cols)|0, cc = cur%cols;
-    if(cur === gi) break;
-    const gc = g[cur];
+function buildPortalSets(){
+  portalSet = {}; const cols = (META.grid && META.grid.cols) || 0;
+  for(const z in PORTALS){ const s = new Set(); for(const rc of PORTALS[z]) s.add(rc[0]*cols + rc[1]); portalSet[z] = s; }
+}
+// Cross-floor A*: nodes are (z,r,c); stair/ladder tiles link to walkable
+// landings on the adjacent floor (same tile or a neighbour, covering stair offset).
+function astar3d(start, goal){
+  const Z = META.levels.map(String);
+  const rows = WALK[start.z].length, cols = WALK[start.z][0].length;
+  const NZ = Z.length, layer = rows*cols, total = NZ*layer;
+  const zi = {}; Z.forEach((z,i)=> zi[z]=i);
+  const cost = (z,r,c)=>{ const w = WALK[z]; return w ? (w[r].charCodeAt(c)-48) : 0; };
+  const id = (zix,r,c)=> (zix*rows + r)*cols + c;
+  const g = new Float64Array(total).fill(Infinity);
+  const came = new Int32Array(total).fill(-1);
+  const gzi = zi[goal.z];
+  const h = (zix,r,c)=> Math.abs(r-goal.r)+Math.abs(c-goal.c)+Math.abs(zix-gzi);
+  const HN=[], HP=[];
+  const push=(n,p)=>{ HN.push(n);HP.push(p);let i=HN.length-1;
+    while(i>0){const q=(i-1)>>1;if(HP[q]<=HP[i])break;[HP[q],HP[i]]=[HP[i],HP[q]];[HN[q],HN[i]]=[HN[i],HN[q]];i=q;} };
+  const pop=()=>{ const t=HN[0],l=HN.length-1;HN[0]=HN[l];HP[0]=HP[l];HN.pop();HP.pop();
+    let i=0;const L=HN.length;while(true){let s=i,a=2*i+1,b=2*i+2;
+      if(a<L&&HP[a]<HP[s])s=a;if(b<L&&HP[b]<HP[s])s=b;if(s===i)break;
+      [HP[s],HP[i]]=[HP[i],HP[s]];[HN[s],HN[i]]=[HN[i],HN[s]];i=s;}return t; };
+  const sId=id(zi[start.z],start.r,start.c), gId=id(zi[goal.z],goal.r,goal.c);
+  g[sId]=0; push(sId, h(zi[start.z],start.r,start.c));
+  const D=[[1,0],[-1,0],[0,1],[0,-1]], VOFF=[[0,0],[1,0],[-1,0],[0,1],[0,-1]], VCOST=8;
+  while(HN.length){
+    const cur=pop(); if(cur===gId) break;
+    const zix=(cur/layer)|0, rem=cur%layer, cr=(rem/cols)|0, cc=rem%cols, z=Z[zix], gc=g[cur];
     for(const d of D){
-      const nr = cr+d[0], nc = cc+d[1];
+      const nr=cr+d[0], nc=cc+d[1];
       if(nr<0||nc<0||nr>=rows||nc>=cols) continue;
-      const w = cost(nr,nc); if(w<=0) continue;
-      const ng = gc + w, ni = idx(nr,nc);
-      if(ng < g[ni]){ g[ni]=ng; came[ni]=cur; push(ni, ng + h(nr,nc)); }
+      const w=cost(z,nr,nc); if(w<=0) continue;
+      const ng=gc+w, ni=id(zix,nr,nc);
+      if(ng<g[ni]){g[ni]=ng;came[ni]=cur;push(ni,ng+h(zix,nr,nc));}
+    }
+    if(portalSet[z] && portalSet[z].has(cr*cols+cc)){
+      for(const dz of [-1,1]){
+        const nzix=zix+dz; if(nzix<0||nzix>=NZ) continue; const nz=Z[nzix];
+        for(const o of VOFF){
+          const nr=cr+o[0], nc=cc+o[1];
+          if(nr<0||nc<0||nr>=rows||nc>=cols) continue;
+          const w=cost(nz,nr,nc); if(w<=0) continue;
+          const ng=gc+VCOST, ni=id(nzix,nr,nc);
+          if(ng<g[ni]){g[ni]=ng;came[ni]=cur;push(ni,ng+h(nzix,nr,nc));}
+        }
+      }
     }
   }
-  if(came[gi] === -1 && gi !== si) return null;
-  const path = []; let cur = gi;
-  while(cur !== -1){ path.push([(cur/cols)|0, cur%cols]); if(cur === si) break; cur = came[cur]; }
-  return path.reverse();
+  if(came[gId]===-1 && gId!==sId) return null;
+  const path=[]; let cur=gId;
+  while(cur!==-1){ const zix=(cur/layer)|0, rem=cur%layer; path.push([Z[zix],(rem/cols)|0,rem%cols]); if(cur===sId) break; cur=came[cur]; }
+  return path.reverse();   // [[zString, r, c], ...]
 }
 function computeRoute(){
-  const walk = WALK[currentZ];
-  if(!walk){ routePts=null; setHint("No routing data on this level."); return; }
-  const s = snapWalkable(walk, routeStart.r, routeStart.c);
-  const e = snapWalkable(walk, routeEnd.r, routeEnd.c);
+  const ws = WALK[routeStart.z], we = WALK[routeEnd.z];
+  if(!ws || !we){ routePts=null; setHint("No routing data."); return; }
+  const s = snapWalkable(ws, routeStart.r, routeStart.c);
+  const e = snapWalkable(we, routeEnd.r, routeEnd.c);
   if(!s || !e){ routePts=null; setHint("Pick spots on walkable ground."); return; }
-  routeStart = s; routeEnd = e;
+  routeStart = {z:routeStart.z, r:s.r, c:s.c}; routeEnd = {z:routeEnd.z, r:e.r, c:e.c};
   const t0 = performance.now();
-  routePts = astar(walk, routeStart, routeEnd);
-  setHint(routePts ? ("Route: "+routePts.length+" tiles ("+Math.round(performance.now()-t0)+" ms) · click to reroute")
-                   : "No route found — blocked off.");
+  routePts = astar3d(routeStart, routeEnd);
+  if(!routePts){ setHint("No route found — blocked off."); return; }
+  const floors = new Set(routePts.map(p=>String(p[0]))).size;
+  setHint("Route: "+routePts.length+" tiles"+(floors>1?" · "+floors+" floors (follow ↑/↓ markers)":"")
+          +" ("+Math.round(performance.now()-t0)+" ms)");
 }
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
@@ -361,11 +409,11 @@ viewer.addHandler("canvas-click", function(e){
   const img = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position));
   const tp = tilePx(), c = Math.floor(img.x/tp), r = Math.floor(img.y/tp);
   if(r<0||c<0||r>=META.grid.rows||c>=META.grid.cols) return;
-  if(routeZ !== currentZ || !routeStart || (routeStart && routeEnd)){
-    routeStart = {r:r, c:c}; routeEnd = null; routePts = null; routeZ = currentZ;
-    setHint("Now click the destination.");
+  if(!routeStart || (routeStart && routeEnd)){
+    routeStart = {z:currentZ, r:r, c:c}; routeEnd = null; routePts = null;
+    setHint("Now switch floors if needed, then click the destination.");
   } else {
-    routeEnd = {r:r, c:c}; computeRoute();
+    routeEnd = {z:currentZ, r:r, c:c}; computeRoute();
   }
   drawRoute();
 });
@@ -390,8 +438,9 @@ document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value
 document.getElementById("borderchk").onchange = e=>{ showBorders = e.target.checked; drawBorders(); };
 document.getElementById("routechk").onchange = e=>{ routeMode = e.target.checked;
   document.getElementById("osd").style.cursor = routeMode ? "crosshair" : "";
-  if(routeMode){ setHint("Route mode: click a start point, then a destination."); }
-  else { routeStart=routeEnd=routePts=null; routeZ=null; drawRoute(); setHint(DEFAULT_HINT); } };
+  setHint(routeMode ? "Route mode: click a start, switch floors if needed, then click a destination." : DEFAULT_HINT); };
+document.getElementById("clearroute").onclick = ()=>{ routeStart = routeEnd = routePts = null; drawRoute();
+  setHint(routeMode ? "Route mode: click a start, then a destination." : DEFAULT_HINT); };
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
@@ -399,11 +448,12 @@ Promise.all([
   fetch("areas.json").then(r=>r.json()).catch(()=>({})),
   fetch("keys.json").then(r=>r.json()).catch(()=>({})),
   fetch("borders.json").then(r=>r.json()).catch(()=>({})),
-  fetch("walk.json").then(r=>r.json()).catch(()=>({}))
-]).then(([meta, pois, areas, keys, borders, walk])=>{
-  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk;
+  fetch("walk.json").then(r=>r.json()).catch(()=>({})),
+  fetch("portals.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas, keys, borders, walk, portals])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals;
   DEFAULT_HINT = document.getElementById("hint").textContent;
-  keyIndex = buildKeyIndex(); buildButtons();
+  buildPortalSets(); keyIndex = buildKeyIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);
