@@ -17,7 +17,10 @@
   .zbtn { cursor:pointer; border:1px solid #3a4654; background:#222a33; color:var(--ink);
     padding:5px 11px; border-radius:7px; font-size:13px; }
   .zbtn.active { background:var(--accent); color:#06140c; border-color:var(--accent); font-weight:600; }
-  #pintoggle { cursor:pointer; user-select:none; font-size:13px; display:flex; gap:5px; align-items:center; }
+  .toggle { cursor:pointer; user-select:none; font-size:13px; display:flex; gap:5px; align-items:center; }
+  .arealbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
+    background:rgba(8,12,10,.8); border:1px solid #3c5a40; color:#cfe8d4;
+    font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
   #poilist { position:absolute; top:10px; right:10px; z-index:10; width:230px; max-height:80%;
     overflow:auto; background:rgba(20,24,30,.85); border:1px solid #2c3540; border-radius:10px;
     padding:8px 10px; font-size:12.5px; backdrop-filter:blur(4px); }
@@ -45,7 +48,8 @@
 <div id="osd"></div>
 <div id="err"></div>
 <div id="bar"><b>dun_world</b><span id="zbtns"></span>
-  <label id="pintoggle"><input type="checkbox" id="pinchk" checked> pins</label></div>
+  <label class="toggle"><input type="checkbox" id="pinchk" checked> pins</label>
+  <label class="toggle"><input type="checkbox" id="areachk"> areas</label></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
 <div id="credit">full sprite render</div>
@@ -53,7 +57,7 @@
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
 <script>
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
-let META = null, POIS = {}, currentZ = null, showPins = true;
+let META = null, POIS = {}, AREAS = {}, currentZ = null, showPins = true, showAreas = false, areaEls = [];
 
 const viewer = OpenSeadragon({
   id: "osd", prefixUrl: OSD_IMG,
@@ -75,8 +79,9 @@ function tileSourceFor(z){
     getTileUrl: (level,x,y)=> "dun_world-z"+z+"_files/"+level+"/"+x+"_"+y+".webp" };
 }
 
-function drawPins(){
-  viewer.clearOverlays();
+// (re)build all overlays for the current level: POI pins + area-name labels.
+function renderOverlays(){
+  viewer.clearOverlays(); areaEls = [];
   const items = document.getElementById("poiitems"); items.innerHTML = "";
   const list = POIS[currentZ] || [];
   if(!list.length) items.innerHTML = "<div style='color:#7d8a96'>none on this level</div>";
@@ -95,7 +100,34 @@ function drawPins(){
       } catch(ex){ showErr("overlay: "+ex.message); }
     }
   });
+  if(showAreas){
+    (AREAS[currentZ] || []).forEach(a=>{
+      try {
+        const el = document.createElement("div"); el.className = "arealbl"; el.textContent = a.name;
+        el.style.display = "none";
+        viewer.addOverlay({ element: el,
+          location: viewer.viewport.imageToViewportCoordinates(a.px, a.py),
+          placement: OpenSeadragon.Placement.CENTER });
+        areaEls.push({ el: el, a: a });
+      } catch(ex){ showErr("area: "+ex.message); }
+    });
+  }
 }
+
+// Declutter: only show an area's label once its footprint is big enough on
+// screen, so region names appear zoomed out and room names reveal as you zoom in.
+function updateAreaVis(){
+  if(!areaEls.length || !viewer.viewport) return;
+  const Pt = OpenSeadragon.Point;
+  for(const it of areaEls){
+    const a = it.a;
+    const p1 = viewer.viewport.imageToViewerElementCoordinates(new Pt(a.px - a.w/2, a.py));
+    const p2 = viewer.viewport.imageToViewerElementCoordinates(new Pt(a.px + a.w/2, a.py));
+    it.el.style.display = (Math.abs(p2.x - p1.x) >= 55) ? "block" : "none";
+  }
+}
+let _rafVis = null;
+function scheduleAreaVis(){ if(_rafVis) return; _rafVis = requestAnimationFrame(()=>{ _rafVis=null; updateAreaVis(); }); }
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
@@ -105,7 +137,8 @@ function loadZ(z){
   document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", b.dataset.z===currentZ));
   viewer.open(tileSourceFor(currentZ));
 }
-viewer.addHandler("open", ()=>{ try{ drawPins(); }catch(ex){ showErr("drawPins: "+ex.message); } });
+viewer.addHandler("open", ()=>{ try{ renderOverlays(); }catch(ex){ showErr("overlays: "+ex.message); } updateAreaVis(); });
+viewer.addHandler("update-viewport", scheduleAreaVis);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
 
 function buildButtons(){
@@ -118,13 +151,15 @@ function buildButtons(){
   });
 }
 
-document.getElementById("pinchk").onchange = e=>{ showPins = e.target.checked; drawPins(); };
+document.getElementById("pinchk").onchange = e=>{ showPins = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("areachk").onchange = e=>{ showAreas = e.target.checked; renderOverlays(); updateAreaVis(); };
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
-  fetch("pois.json").then(r=>r.json()).catch(()=>({}))
-]).then(([meta, pois])=>{
-  META = meta; POIS = pois; buildButtons();
+  fetch("pois.json").then(r=>r.json()).catch(()=>({})),
+  fetch("areas.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas])=>{
+  META = meta; POIS = pois; AREAS = areas; buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);

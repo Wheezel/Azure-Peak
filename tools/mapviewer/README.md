@@ -41,8 +41,14 @@ https://wheezel.github.io/Azure-Peak/classic/    <- the half-res /docs viewer
 Each run:
 1. builds **SpacemanDMM `dmm-tools`** (cached after the first run),
 2. renders one PNG per z-level (`dmm-tools … minimap`),
-3. runs `build.py` → WebP Deep-Zoom tiles + `pois.json` + `meta.json`,
+3. runs `build.py` → WebP Deep-Zoom tiles + `pois.json` + `areas.json` + `meta.json`,
 4. uploads the `_site` folder and deploys it to Pages.
+
+**Viewer controls:** z-level buttons; a **pins** toggle (points of interest); and
+an **areas** toggle — a layer that labels every area with its `.dmm` path (the
+"key", e.g. `town/manor`, `under/underdark`) so you can tell what's what.
+Area labels declutter by zoom: big regions show zoomed out, room-level areas
+appear as you zoom in.
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count

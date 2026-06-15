@@ -79,6 +79,28 @@ def build_pois(flagged, area_pts, maxy):
     if m: add(m[2], "The Inquisition (manor)", m[0], m[1], "manor")
     return {str(z): v for z, v in sorted(pois.items())}
 
+def build_areas(area_pts, maxy, min_tiles=10):
+    """Per z-level, every area's short name + centroid + bbox (in render px).
+    Powers the toggleable 'areas' identification layer in the viewer."""
+    out = defaultdict(list)
+    for area, by_z in area_pts.items():
+        if not area: continue
+        short = area.replace("/area/rogue/", "").replace("indoors/", "").replace("outdoors/", "")
+        for z, pts in by_z.items():
+            if len(pts) < min_tiles: continue
+            xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+            cx = sum(xs)/len(xs); cy = sum(ys)/len(ys)
+            out[str(z)].append({
+                "name": short,
+                "px": round((cx-1)*TILE_PX + TILE_PX/2),
+                "py": round((maxy-cy)*TILE_PX + TILE_PX/2),
+                "w": (max(xs)-min(xs)+1)*TILE_PX,
+                "h": (max(ys)-min(ys)+1)*TILE_PX,
+                "n": len(pts),
+            })
+    for z in out: out[z].sort(key=lambda a: -a["n"])
+    return dict(out)
+
 # ---------------------------------------------------------------- dzi tiling
 def make_dzi(src, base, out, tile, overlap, quality, max_width=None):
     im = Image.open(src).convert("RGB")
@@ -141,6 +163,8 @@ def main():
     json.dump(meta, open(os.path.join(args.out, "meta.json"), "w"), indent=1)
     json.dump(build_pois(flagged, area_pts, maxy),
               open(os.path.join(args.out, "pois.json"), "w"), indent=1)
+    json.dump(build_areas(area_pts, maxy),
+              open(os.path.join(args.out, "areas.json"), "w"), indent=1)
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
     open(os.path.join(args.out, ".nojekyll"), "w").close()
     if args.classic and os.path.isdir(args.classic):
