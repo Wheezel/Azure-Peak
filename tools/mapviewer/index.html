@@ -61,6 +61,13 @@
   .kswatch { width:12px; height:12px; border-radius:3px; border:1px solid #0007; }
   .kname i { color:#9fb6c6; }
   .kcount { color:#9fb3c0; font-variant-numeric:tabular-nums; }
+  #routepanel { position:absolute; top:54px; left:50%; transform:translateX(-50%); z-index:11;
+    display:none; gap:6px; align-items:center; flex-wrap:wrap; background:rgba(20,24,30,.92);
+    border:1px solid #2c3540; border-radius:10px; padding:7px 10px; backdrop-filter:blur(4px); }
+  #routepanel .rlab { font-size:12px; color:#9fb3c0; }
+  #routepanel .rdot { width:9px; height:9px; border-radius:50%; }
+  #routepanel input { padding:5px 8px; border-radius:6px; border:1px solid #3a4654;
+    background:#161b21; color:#e7eef0; font-size:13px; width:188px; }
 </style>
 </head>
 <body>
@@ -79,6 +86,13 @@
   <input id="keysearch" type="text" placeholder="search key or lockid…" autocomplete="off">
   <div id="keytable"></div>
 </div>
+<div id="routepanel">
+  <span class="rdot" style="background:#2ecc71"></span><span class="rlab">From</span>
+  <input id="routefrom" list="routeopts" placeholder="search area / key / place…" autocomplete="off">
+  <span class="rdot" style="background:#e74c3c"></span><span class="rlab">To</span>
+  <input id="routeto" list="routeopts" placeholder="search destination…" autocomplete="off">
+  <datalist id="routeopts"></datalist>
+</div>
 <div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
 <div id="credit">full sprite render</div>
 
@@ -90,7 +104,7 @@ let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
 let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, showBorders = false, routeMode = false;
 let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
-let routeStart = null, routeEnd = null, routePts = null;
+let routeStart = null, routeEnd = null, routePts = null, routeMap = {};
 const SVGNS = "http://www.w3.org/2000/svg";
 
 const viewer = OpenSeadragon({
@@ -339,6 +353,39 @@ function computeRoute(){
   setHint("Route: "+routePts.length+" tiles"+(floors>1?" · "+floors+" floors (follow ↑/↓ markers)":"")
           +" ("+Math.round(performance.now()-t0)+" ms)");
 }
+
+// ---- From/To search for the route mapper (areas, keys, places) ----
+function tileFromPx(px,py){ const tp = META.dims[String(META.levels[0])][0] / META.grid.cols;
+  return { r: Math.floor(py/tp), c: Math.floor(px/tp) }; }
+function buildRouteIndex(){
+  routeMap = {}; const opts = [];
+  const add = (label, z, px, py)=>{ if(routeMap[label]) return; const t = tileFromPx(px,py);
+    routeMap[label] = { z:String(z), r:t.r, c:t.c }; opts.push(label); };
+  const best = {};                                   // one entry per area name (its biggest floor)
+  for(const z in AREAS) for(const a of AREAS[z]){
+    if(!best[a.name] || a.n > best[a.name].n) best[a.name] = { z:z, px:a.px, py:a.py, n:a.n }; }
+  for(const name in best){ const b = best[name]; add(name + "  ·  area", b.z, b.px, b.py); }
+  for(const e of keyIndex){ const z = Object.keys(e.byz)[0]; const d = e.byz[z][0];
+    add((e.key || e.lockid) + "  ·  key", z, d.px, d.py); }       // representative door per key
+  for(const z in POIS) for(const p of POIS[z]) add(p.name + "  ·  place", z, p.px, p.py);
+  const dl = document.getElementById("routeopts"); dl.innerHTML = "";
+  opts.sort().forEach(o=>{ const op = document.createElement("option"); op.value = o; dl.appendChild(op); });
+}
+function flyToTile(z,r,c){
+  const go = ()=>{ const tp = tilePx();
+    viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates((c+0.5)*tp,(r+0.5)*tp));
+    viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 3.2)); };
+  if(String(z) !== String(currentZ)){ loadZ(+z); viewer.addOnceHandler("open", go); } else go();
+}
+function setSearchEndpoint(which, value){
+  const loc = routeMap[value]; if(!loc) return;
+  if(which === "from") routeStart = { z:loc.z, r:loc.r, c:loc.c };
+  else routeEnd = { z:loc.z, r:loc.r, c:loc.c };
+  if(routeStart && routeEnd) computeRoute();
+  drawRoute();
+  const focus = (which === "from") ? routeStart : routeEnd;
+  if(focus) flyToTile(focus.z, focus.r, focus.c);
+}
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
@@ -438,9 +485,13 @@ document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value
 document.getElementById("borderchk").onchange = e=>{ showBorders = e.target.checked; drawBorders(); };
 document.getElementById("routechk").onchange = e=>{ routeMode = e.target.checked;
   document.getElementById("osd").style.cursor = routeMode ? "crosshair" : "";
-  setHint(routeMode ? "Route mode: click a start, switch floors if needed, then click a destination." : DEFAULT_HINT); };
-document.getElementById("clearroute").onclick = ()=>{ routeStart = routeEnd = routePts = null; drawRoute();
-  setHint(routeMode ? "Route mode: click a start, then a destination." : DEFAULT_HINT); };
+  document.getElementById("routepanel").style.display = routeMode ? "flex" : "none";
+  setHint(routeMode ? "Route mode: search From/To, or click a start then a destination (across floors)." : DEFAULT_HINT); };
+document.getElementById("clearroute").onclick = ()=>{ routeStart = routeEnd = routePts = null;
+  document.getElementById("routefrom").value = ""; document.getElementById("routeto").value = "";
+  drawRoute(); setHint(routeMode ? "Route mode: search From/To, or click start then destination." : DEFAULT_HINT); };
+document.getElementById("routefrom").onchange = e=> setSearchEndpoint("from", e.target.value);
+document.getElementById("routeto").onchange = e=> setSearchEndpoint("to", e.target.value);
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
@@ -453,7 +504,7 @@ Promise.all([
 ]).then(([meta, pois, areas, keys, borders, walk, portals])=>{
   META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals;
   DEFAULT_HINT = document.getElementById("hint").textContent;
-  buildPortalSets(); keyIndex = buildKeyIndex(); buildButtons();
+  buildPortalSets(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);

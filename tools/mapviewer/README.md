@@ -58,6 +58,9 @@ Routing is **cross-floor**: stairs/ladders are extracted as floor links
 (`portals.json`), so a path can go up/down levels — it draws the portion on the
 current floor and drops **↑/↓ markers** where it changes z; since the view is
 preserved across z-switches, you just follow the markers between floors.
+Endpoints can be set by **clicking the map** or via the route panel's **From/To
+search boxes** — autocomplete over every **area**, **key** (a door it opens),
+and **POI**; picking one flies you there and routes when both ends are set.
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count
