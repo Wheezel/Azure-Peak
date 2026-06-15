@@ -68,6 +68,15 @@
   #routepanel .rdot { width:9px; height:9px; border-radius:50%; }
   #routepanel input { padding:5px 8px; border-radius:6px; border:1px solid #3a4654;
     background:#161b21; color:#e7eef0; font-size:13px; width:188px; }
+  #routepanel .rwrap { position:relative; display:inline-block; }
+  .rdrop { position:absolute; top:100%; left:0; right:0; margin-top:3px; z-index:30; display:none;
+    max-height:288px; overflow:auto; background:#11161c; border:1px solid #3a4654; border-radius:7px;
+    box-shadow:0 6px 18px #0008; }
+  .rdrop .ritem { padding:5px 8px; font-size:12.5px; cursor:pointer; display:flex; gap:7px; align-items:center; }
+  .rdrop .ritem:hover, .rdrop .ritem.sel { background:#26323d; }
+  .rtag { font-size:10px; padding:1px 5px; border-radius:4px; color:#0b0f12; font-weight:600; text-transform:uppercase; }
+  .rtag.area{background:#7fd1a0} .rtag.key{background:#e0b54a} .rtag.place{background:#9ec7ff}
+  .rz { margin-left:auto; color:#6b7a86; font-size:11px; }
 </style>
 </head>
 <body>
@@ -88,10 +97,9 @@
 </div>
 <div id="routepanel">
   <span class="rdot" style="background:#2ecc71"></span><span class="rlab">From</span>
-  <input id="routefrom" list="routeopts" placeholder="search area / key / place…" autocomplete="off">
+  <span class="rwrap"><input id="routefrom" placeholder="search area / key / place…" autocomplete="off"><div class="rdrop" id="fromdrop"></div></span>
   <span class="rdot" style="background:#e74c3c"></span><span class="rlab">To</span>
-  <input id="routeto" list="routeopts" placeholder="search destination…" autocomplete="off">
-  <datalist id="routeopts"></datalist>
+  <span class="rwrap"><input id="routeto" placeholder="search destination…" autocomplete="off"><div class="rdrop" id="todrop"></div></span>
 </div>
 <div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
 <div id="credit">full sprite render</div>
@@ -104,7 +112,8 @@ let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
 let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, showBorders = false, routeMode = false;
 let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
-let routeStart = null, routeEnd = null, routePts = null, routeMap = {};
+let routeStart = null, routeEnd = null, routePts = null, routeEntries = [];
+const dropSel = { from: -1, to: -1 };
 const SVGNS = "http://www.w3.org/2000/svg";
 
 const viewer = OpenSeadragon({
@@ -358,33 +367,56 @@ function computeRoute(){
 function tileFromPx(px,py){ const tp = META.dims[String(META.levels[0])][0] / META.grid.cols;
   return { r: Math.floor(py/tp), c: Math.floor(px/tp) }; }
 function buildRouteIndex(){
-  routeMap = {}; const opts = [];
-  const add = (label, z, px, py)=>{ if(routeMap[label]) return; const t = tileFromPx(px,py);
-    routeMap[label] = { z:String(z), r:t.r, c:t.c }; opts.push(label); };
+  routeEntries = []; const seen = {};
+  const add = (name, type, z, px, py)=>{ const k = type+"|"+name; if(seen[k]) return; seen[k] = 1;
+    const t = tileFromPx(px,py); routeEntries.push({ name:name, type:type, z:String(z), r:t.r, c:t.c }); };
   const best = {};                                   // one entry per area name (its biggest floor)
   for(const z in AREAS) for(const a of AREAS[z]){
     if(!best[a.name] || a.n > best[a.name].n) best[a.name] = { z:z, px:a.px, py:a.py, n:a.n }; }
-  for(const name in best){ const b = best[name]; add(name + "  ·  area", b.z, b.px, b.py); }
+  for(const name in best){ const b = best[name]; add(name, "area", b.z, b.px, b.py); }
   for(const e of keyIndex){ const z = Object.keys(e.byz)[0]; const d = e.byz[z][0];
-    add((e.key || e.lockid) + "  ·  key", z, d.px, d.py); }       // representative door per key
-  for(const z in POIS) for(const p of POIS[z]) add(p.name + "  ·  place", z, p.px, p.py);
-  const dl = document.getElementById("routeopts"); dl.innerHTML = "";
-  opts.sort().forEach(o=>{ const op = document.createElement("option"); op.value = o; dl.appendChild(op); });
+    add(e.key || e.lockid, "key", z, d.px, d.py); }   // representative door per key
+  for(const z in POIS) for(const p of POIS[z]) add(p.name, "place", z, p.px, p.py);
+  routeEntries.sort((a,b)=> a.name.localeCompare(b.name));
+}
+function dropEls(which){ return [ document.getElementById(which==="from"?"routefrom":"routeto"),
+                                  document.getElementById(which==="from"?"fromdrop":"todrop") ]; }
+function renderDrop(which){
+  const [input, drop] = dropEls(which);
+  const q = input.value.toLowerCase().trim();
+  const matches = routeEntries.filter(e=> !q || e.name.toLowerCase().includes(q)).slice(0, 14);
+  drop.innerHTML = ""; dropSel[which] = -1; drop._matches = matches;
+  if(!matches.length){ drop.style.display = "none"; return; }
+  matches.forEach((e,i)=>{ const row = document.createElement("div"); row.className = "ritem";
+    row.innerHTML = '<span class="rtag '+e.type+'">'+e.type+'</span><span>'+e.name+'</span><span class="rz">z'+e.z+'</span>';
+    row.onmousedown = (ev)=>{ ev.preventDefault(); selectEntry(which, e); };
+    drop.appendChild(row); });
+  drop.style.display = "block";
+}
+function selectEntry(which, e){
+  const [input, drop] = dropEls(which);
+  input.value = e.name; drop.style.display = "none";
+  if(which === "from") routeStart = { z:e.z, r:e.r, c:e.c };
+  else routeEnd = { z:e.z, r:e.r, c:e.c };
+  if(routeStart && routeEnd) computeRoute();
+  drawRoute(); flyToTile(e.z, e.r, e.c);
+}
+function dropKey(which, ev){
+  const [, drop] = dropEls(which);
+  if(drop.style.display !== "block") return;
+  const m = drop._matches || []; if(!m.length) return;
+  if(ev.key === "ArrowDown"){ dropSel[which] = Math.min(dropSel[which]+1, m.length-1); ev.preventDefault(); }
+  else if(ev.key === "ArrowUp"){ dropSel[which] = Math.max(dropSel[which]-1, 0); ev.preventDefault(); }
+  else if(ev.key === "Enter"){ selectEntry(which, m[dropSel[which] >= 0 ? dropSel[which] : 0]); ev.preventDefault(); return; }
+  else if(ev.key === "Escape"){ drop.style.display = "none"; return; }
+  else return;
+  [...drop.children].forEach((c,i)=> c.classList.toggle("sel", i === dropSel[which]));
 }
 function flyToTile(z,r,c){
   const go = ()=>{ const tp = tilePx();
     viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates((c+0.5)*tp,(r+0.5)*tp));
     viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 3.2)); };
   if(String(z) !== String(currentZ)){ loadZ(+z); viewer.addOnceHandler("open", go); } else go();
-}
-function setSearchEndpoint(which, value){
-  const loc = routeMap[value]; if(!loc) return;
-  if(which === "from") routeStart = { z:loc.z, r:loc.r, c:loc.c };
-  else routeEnd = { z:loc.z, r:loc.r, c:loc.c };
-  if(routeStart && routeEnd) computeRoute();
-  drawRoute();
-  const focus = (which === "from") ? routeStart : routeEnd;
-  if(focus) flyToTile(focus.z, focus.r, focus.c);
 }
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
@@ -489,9 +521,15 @@ document.getElementById("routechk").onchange = e=>{ routeMode = e.target.checked
   setHint(routeMode ? "Route mode: search From/To, or click a start then a destination (across floors)." : DEFAULT_HINT); };
 document.getElementById("clearroute").onclick = ()=>{ routeStart = routeEnd = routePts = null;
   document.getElementById("routefrom").value = ""; document.getElementById("routeto").value = "";
+  document.getElementById("fromdrop").style.display = "none"; document.getElementById("todrop").style.display = "none";
   drawRoute(); setHint(routeMode ? "Route mode: search From/To, or click start then destination." : DEFAULT_HINT); };
-document.getElementById("routefrom").onchange = e=> setSearchEndpoint("from", e.target.value);
-document.getElementById("routeto").onchange = e=> setSearchEndpoint("to", e.target.value);
+["from","to"].forEach(which=>{
+  const input = dropEls(which)[0];
+  input.addEventListener("input", ()=> renderDrop(which));
+  input.addEventListener("focus", ()=> renderDrop(which));
+  input.addEventListener("keydown", (ev)=> dropKey(which, ev));
+  input.addEventListener("blur", ()=> setTimeout(()=>{ dropEls(which)[1].style.display = "none"; }, 150));
+});
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
