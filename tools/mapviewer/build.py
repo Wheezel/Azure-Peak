@@ -28,11 +28,13 @@ def parse_map(path):
     gridstart = re.search(r'^\(\d+,\d+,\d+\) = \{"', txt, re.M).start()
     dtxt = txt[:gridstart]
     entry = re.compile(r'^"([a-zA-Z]+)" = \((.*?)\)\s*$', re.S | re.M)
-    key_area, key_flags = {}, {}
+    key_area, key_flags, key_locks = {}, {}, {}
     for m in entry.finditer(dtxt):
         k, body = m.group(1), m.group(2)
         ar = re.findall(r'/area/[A-Za-z0-9_/]+', body)
         key_area[k] = ar[-1] if ar else None
+        locks = re.findall(r'lockid = "([^"]+)"', body)
+        if locks: key_locks[k] = locks
         key_flags[k] = {
             "mother": "/obj/structure/roguemachine/mossmother/travel" not in body
                        and "/obj/structure/roguemachine/mossmother" in body,
@@ -40,9 +42,10 @@ def parse_map(path):
             "sacred": "/obj/structure/flora/roguetree/wise/druids" in body,
         }
     block = re.compile(r'^\((\d+),(\d+),(\d+)\) = \{"\n(.*?)\n"\}', re.S | re.M)
-    # gather points for flagged keys + area tiles, and overall map height
+    # gather points for flagged keys + area tiles + locked doors, and map height
     flagged = defaultdict(list)          # flag -> [(x,y,z)]
     area_pts = defaultdict(lambda: defaultdict(list))  # area -> z -> [(x,y)]
+    lock_pts = defaultdict(list)         # lockid -> [(x,y,z)]
     maxy = 0
     for b in block.finditer(txt):
         x, _, z = int(b.group(1)), int(b.group(2)), int(b.group(3))
@@ -51,11 +54,13 @@ def parse_map(path):
             key = key.strip(); y = n - i
             fa = key_area.get(key)
             if fa: area_pts[fa][z].append((x, y))
+            for lid in key_locks.get(key, ()):
+                lock_pts[lid].append((x, y, z))
             fl = key_flags.get(key)
             if fl:
                 for name, on in fl.items():
                     if on: flagged[name].append((x, y, z))
-    return flagged, area_pts, maxy
+    return flagged, area_pts, lock_pts, maxy
 
 def centroid(area_pts, area):
     by_z = area_pts.get(area)
@@ -101,6 +106,34 @@ def build_areas(area_pts, maxy, min_tiles=10):
     for z in out: out[z].sort(key=lambda a: -a["n"])
     return dict(out)
 
+def parse_keys(path):
+    """lockid -> key name, parsed from the roguekey definitions (keys.dm).
+    Lets the keys layer say which key opens each locked door."""
+    lockmap = {}
+    if not path or not os.path.isfile(path):
+        return lockmap
+    txt = open(path, errors="replace").read()
+    last_name = None
+    for tok in re.finditer(r'name = "([^"]+)"|lockid = "([^"]+)"', txt):
+        if tok.group(1) is not None:
+            last_name = tok.group(1)
+        elif tok.group(2) not in lockmap and last_name:
+            lockmap[tok.group(2)] = last_name
+    return lockmap
+
+def build_keys(lock_pts, lockmap, maxy):
+    """Per z-level, every locked door: its lockid + the key that opens it."""
+    out = defaultdict(list)
+    for lid, pts in lock_pts.items():
+        keyname = lockmap.get(lid)
+        for (x, y, z) in pts:
+            out[str(z)].append({
+                "lockid": lid, "key": keyname,
+                "px": (x-1)*TILE_PX + TILE_PX//2,
+                "py": (maxy-y)*TILE_PX + TILE_PX//2,
+            })
+    return dict(out)
+
 # ---------------------------------------------------------------- dzi tiling
 def make_dzi(src, base, out, tile, overlap, quality, max_width=None):
     im = Image.open(src).convert("RGB")
@@ -133,6 +166,8 @@ def main():
     ap.add_argument("--quality", type=int, default=82)
     ap.add_argument("--max-width", type=int, default=0, help="downscale renders to this width (0 = native/full res)")
     ap.add_argument("--classic", default="", help="optional dir to copy in under /classic")
+    ap.add_argument("--keys", default="code/game/objects/items/rogueitems/keys.dm",
+                    help="path to keys.dm for the lockid -> key-name mapping")
     args = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -141,7 +176,8 @@ def main():
     if not renders:
         sys.exit(f"no renders found in {args.renders}")
 
-    flagged, area_pts, maxy = parse_map(args.map)
+    flagged, area_pts, lock_pts, maxy = parse_map(args.map)
+    lockmap = parse_keys(args.keys)
 
     dims = {}
     for png in renders:
@@ -165,6 +201,8 @@ def main():
               open(os.path.join(args.out, "pois.json"), "w"), indent=1)
     json.dump(build_areas(area_pts, maxy),
               open(os.path.join(args.out, "areas.json"), "w"), indent=1)
+    json.dump(build_keys(lock_pts, lockmap, maxy),
+              open(os.path.join(args.out, "keys.json"), "w"), indent=1)
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
     open(os.path.join(args.out, ".nojekyll"), "w").close()
     if args.classic and os.path.isdir(args.classic):

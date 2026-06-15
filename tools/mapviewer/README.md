@@ -44,11 +44,13 @@ Each run:
 3. runs `build.py` → WebP Deep-Zoom tiles + `pois.json` + `areas.json` + `meta.json`,
 4. uploads the `_site` folder and deploys it to Pages.
 
-**Viewer controls:** z-level buttons; a **pins** toggle (points of interest); and
-an **areas** toggle — a layer that labels every area with its `.dmm` path (the
-"key", e.g. `town/manor`, `under/underdark`) so you can tell what's what.
-Area labels declutter by zoom: big regions show zoomed out, room-level areas
-appear as you zoom in.
+**Viewer controls:** z-level buttons; a **pins** toggle (points of interest); an
+**areas** toggle — labels every area with its `.dmm` path (`town/manor`,
+`under/underdark`); and a **keys** toggle — labels every locked door with the
+**key that opens it** (e.g. 🔑 bishop's key, 🔑 dungeon key), parsed by matching
+each door's `lockid` to the `roguekey` definitions in `keys.dm`. Both label
+layers declutter by zoom: regions show zoomed out, individual doors/rooms appear
+as you zoom in.
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count

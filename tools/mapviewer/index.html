@@ -21,6 +21,9 @@
   .arealbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
     background:rgba(8,12,10,.8); border:1px solid #3c5a40; color:#cfe8d4;
     font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
+  .keylbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
+    background:rgba(30,22,6,.86); border:1px solid #b8902f; color:#f3d99a;
+    font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
   #poilist { position:absolute; top:10px; right:10px; z-index:10; width:230px; max-height:80%;
     overflow:auto; background:rgba(20,24,30,.85); border:1px solid #2c3540; border-radius:10px;
     padding:8px 10px; font-size:12.5px; backdrop-filter:blur(4px); }
@@ -49,7 +52,8 @@
 <div id="err"></div>
 <div id="bar"><b>dun_world</b><span id="zbtns"></span>
   <label class="toggle"><input type="checkbox" id="pinchk" checked> pins</label>
-  <label class="toggle"><input type="checkbox" id="areachk"> areas</label></div>
+  <label class="toggle"><input type="checkbox" id="areachk"> areas</label>
+  <label class="toggle"><input type="checkbox" id="keychk"> keys</label></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
 <div id="credit">full sprite render</div>
@@ -57,7 +61,8 @@
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
 <script>
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
-let META = null, POIS = {}, AREAS = {}, currentZ = null, showPins = true, showAreas = false, areaEls = [];
+let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
+let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 
 const viewer = OpenSeadragon({
   id: "osd", prefixUrl: OSD_IMG,
@@ -81,7 +86,7 @@ function tileSourceFor(z){
 
 // (re)build all overlays for the current level: POI pins + area-name labels.
 function renderOverlays(){
-  viewer.clearOverlays(); areaEls = [];
+  viewer.clearOverlays(); labelEls = [];
   const items = document.getElementById("poiitems"); items.innerHTML = "";
   const list = POIS[currentZ] || [];
   if(!list.length) items.innerHTML = "<div style='color:#7d8a96'>none on this level</div>";
@@ -100,30 +105,31 @@ function renderOverlays(){
       } catch(ex){ showErr("overlay: "+ex.message); }
     }
   });
-  if(showAreas){
-    (AREAS[currentZ] || []).forEach(a=>{
-      try {
-        const el = document.createElement("div"); el.className = "arealbl"; el.textContent = a.name;
-        el.style.display = "none";
-        viewer.addOverlay({ element: el,
-          location: viewer.viewport.imageToViewportCoordinates(a.px, a.py),
-          placement: OpenSeadragon.Placement.CENTER });
-        areaEls.push({ el: el, a: a });
-      } catch(ex){ showErr("area: "+ex.message); }
-    });
+  function addLabel(cls, text, px, py, w, thr){
+    try {
+      const el = document.createElement("div"); el.className = cls; el.textContent = text;
+      el.style.display = "none";
+      viewer.addOverlay({ element: el,
+        location: viewer.viewport.imageToViewportCoordinates(px, py),
+        placement: OpenSeadragon.Placement.CENTER });
+      labelEls.push({ el: el, px: px, w: w, thr: thr });
+    } catch(ex){ showErr("label: "+ex.message); }
   }
+  if(showAreas)
+    (AREAS[currentZ] || []).forEach(a=> addLabel("arealbl", a.name, a.px, a.py, a.w||32, 55));
+  if(showKeys)
+    (KEYS[currentZ] || []).forEach(k=> addLabel("keylbl", "🔑 "+(k.key||k.lockid), k.px, k.py, 32, 24));
 }
 
-// Declutter: only show an area's label once its footprint is big enough on
-// screen, so region names appear zoomed out and room names reveal as you zoom in.
+// Declutter: show a label once its feature is big enough on screen — region/key
+// names appear as you zoom in, so it never becomes a wall of text.
 function updateAreaVis(){
-  if(!areaEls.length || !viewer.viewport) return;
+  if(!labelEls.length || !viewer.viewport) return;
   const Pt = OpenSeadragon.Point;
-  for(const it of areaEls){
-    const a = it.a;
-    const p1 = viewer.viewport.imageToViewerElementCoordinates(new Pt(a.px - a.w/2, a.py));
-    const p2 = viewer.viewport.imageToViewerElementCoordinates(new Pt(a.px + a.w/2, a.py));
-    it.el.style.display = (Math.abs(p2.x - p1.x) >= 55) ? "block" : "none";
+  for(const it of labelEls){
+    const p1 = viewer.viewport.imageToViewerElementCoordinates(new Pt(it.px - it.w/2, 0));
+    const p2 = viewer.viewport.imageToViewerElementCoordinates(new Pt(it.px + it.w/2, 0));
+    it.el.style.display = (Math.abs(p2.x - p1.x) >= it.thr) ? "block" : "none";
   }
 }
 let _rafVis = null;
@@ -153,13 +159,15 @@ function buildButtons(){
 
 document.getElementById("pinchk").onchange = e=>{ showPins = e.target.checked; renderOverlays(); updateAreaVis(); };
 document.getElementById("areachk").onchange = e=>{ showAreas = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("keychk").onchange = e=>{ showKeys = e.target.checked; renderOverlays(); updateAreaVis(); };
 
 Promise.all([
   fetch("meta.json").then(r=>r.json()),
   fetch("pois.json").then(r=>r.json()).catch(()=>({})),
-  fetch("areas.json").then(r=>r.json()).catch(()=>({}))
-]).then(([meta, pois, areas])=>{
-  META = meta; POIS = pois; AREAS = areas; buildButtons();
+  fetch("areas.json").then(r=>r.json()).catch(()=>({})),
+  fetch("keys.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas, keys])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);
