@@ -116,7 +116,7 @@
   <span class="rdot" style="background:#e74c3c"></span><span class="rlab">To</span>
   <span class="rwrap"><input id="routeto" placeholder="search destination…" autocomplete="off"><div class="rdrop" id="todrop"></div></span>
 </div>
-<div id="hint">drag to scroll · wheel / pinch to zoom · click stairs to jump floors · click a pin to fly there</div>
+<div id="hint">drag · zoom · click stairs/portals to jump · shift-right-click openspace to drop below</div>
 <div id="credit">full sprite render</div>
 
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
@@ -125,7 +125,7 @@ const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/opensead
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
 let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
-let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, LINKS = [], linkFrom = {}, showBorders = false, routeMode = false;
+let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, LINKS = [], linkFrom = {}, OPEN = {}, showBorders = false, routeMode = false;
 let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
 let routeStart = null, routeEnd = null, routePts = null, routeEntries = [];
 const dropSel = { from: -1, to: -1 };
@@ -477,6 +477,18 @@ function portalJump(z, r, c){
   };
   return tryDir(true) || tryDir(false);
 }
+function isOpen(z, r, c){ const m = OPEN[String(z)]; return !!(m && m[r] && m[r].charAt(c) === "1"); }
+// shift-right-click openspace -> drop to the (aligned) level below it
+function descendOpenspace(r, c){
+  if(!isOpen(currentZ, r, c)){ setHint("Not openspace — nothing below to drop to here."); return; }
+  const Z = META.levels.map(String), zix = Z.indexOf(String(currentZ));
+  if(zix <= 0){ setHint("Already at the lowest level."); return; }
+  const below = Z[zix-1];
+  if(colsOf(below) !== colsOf(currentZ) || rowsOf(below) !== rowsOf(currentZ)){
+    setHint("No aligned level directly below this map."); return; }
+  flyToTile(below, r, c);
+  setHint("↓ dropped to z" + below + " (below the openspace)");
+}
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
@@ -562,6 +574,15 @@ viewer.addHandler("canvas-click", function(e){
   }
   drawRoute();
 });
+document.getElementById("osd").addEventListener("contextmenu", function(ev){
+  if(!ev.shiftKey || !META || !META.dims) return;   // shift+right-click only
+  ev.preventDefault();
+  const rect = document.getElementById("osd").getBoundingClientRect();
+  const pix = new OpenSeadragon.Point(ev.clientX - rect.left, ev.clientY - rect.top);
+  const img = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(pix));
+  const tp = tilePx(), c = Math.floor(img.x/tp), r = Math.floor(img.y/tp);
+  if(r>=0 && c>=0 && r<rowsOf(currentZ) && c<colsOf(currentZ)) descendOpenspace(r, c);
+});
 
 function buildButtons(){
   const wrap = document.getElementById("zbtns");
@@ -605,9 +626,10 @@ Promise.all([
   fetch("borders.json").then(r=>r.json()).catch(()=>({})),
   fetch("walk.json").then(r=>r.json()).catch(()=>({})),
   fetch("portals.json").then(r=>r.json()).catch(()=>({})),
-  fetch("links.json").then(r=>r.json()).catch(()=>([]))
-]).then(([meta, pois, areas, keys, borders, walk, portals, links])=>{
-  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals; LINKS = links;
+  fetch("links.json").then(r=>r.json()).catch(()=>([])),
+  fetch("openspace.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas, keys, borders, walk, portals, links, opens])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals; LINKS = links; OPEN = opens;
   DEFAULT_HINT = document.getElementById("hint").textContent;
   buildPortalSets(); buildLinkMap(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =

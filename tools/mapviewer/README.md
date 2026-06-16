@@ -68,6 +68,11 @@ where it leads** — stairs/ladders to the partner landing on the adjacent floor
 **travel-tiles to the linked map** (e.g. a `wretch` portal teleports to the
 Wretch Coast).
 
+**Openspace is rendered see-through, like in game:** where a level has openspace,
+the level below shows through it (dimmed for depth, composited recursively in
+`build.py`). And **shift-right-clicking openspace drops the view to the level
+below** at that spot (`openspace.json` marks the see-through tiles).
+
 **All world z-levels are included.** The world stacks several maps at runtime, so
 the viewer renders them in load order with matching z-numbers: **dun_world →
 z1–4**, **dungeon → z5–6**, **wretch_coast → z7–9** (config in `build.py`'s

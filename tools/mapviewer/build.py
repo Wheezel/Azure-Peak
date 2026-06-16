@@ -17,7 +17,7 @@ Usage:
 """
 import argparse, glob, json, math, os, re, shutil, sys, datetime
 from collections import Counter, defaultdict
-from PIL import Image
+from PIL import Image, ImageEnhance
 Image.MAX_IMAGE_PIXELS = None
 
 TILE_PX = 32  # dmm-tools renders every map tile as 32x32 px
@@ -40,7 +40,7 @@ def parse_map(path):
     gridstart = re.search(r'^\(\d+,\d+,\d+\) = \{"', txt, re.M).start()
     dtxt = txt[:gridstart]
     entry = re.compile(r'^"([a-zA-Z]+)" = \((.*?)\)\s*$', re.S | re.M)
-    key_area, key_flags, key_locks, key_cost, key_portal = {}, {}, {}, {}, {}
+    key_area, key_flags, key_locks, key_cost, key_portal, key_open = {}, {}, {}, {}, {}, {}
     for m in entry.finditer(dtxt):
         k, body = m.group(1), m.group(2)
         ar = re.findall(r'/area/[A-Za-z0-9_/]+', body)
@@ -50,6 +50,7 @@ def parse_map(path):
         tu = re.findall(r'/turf/[A-Za-z0-9_/]+', body)
         key_cost[k] = turf_cost(tu[-1] if tu else "")
         key_portal[k] = ("/obj/structure/stairs" in body) or ("/obj/structure/ladder" in body)
+        key_open[k] = "/turf/open/transparent/openspace" in body
         key_flags[k] = {
             "mother": "/obj/structure/roguemachine/mossmother/travel" not in body
                        and "/obj/structure/roguemachine/mossmother" in body,
@@ -63,6 +64,7 @@ def parse_map(path):
     tile_area = defaultdict(dict)        # z -> {(row,col): area_id}  (row 0 = north/top)
     tile_cost = defaultdict(dict)        # z -> {(row,col): walk_cost}
     portal_pts = defaultdict(list)       # z -> [(row,col)]  stairs/ladders (floor links)
+    tile_open = defaultdict(set)         # z -> {(row,col)}  openspace (see-through to below)
     area_ids = {}
     maxx = maxy = 0
     for b in block.finditer(txt):
@@ -80,13 +82,14 @@ def parse_map(path):
             cost = key_cost.get(key, 0)
             if cost: tile_cost[z][(i, col)] = cost
             if key_portal.get(key): portal_pts[z].append((i, col))
+            if key_open.get(key): tile_open[z].add((i, col))
             for lid in key_locks.get(key, ()):
                 lock_pts[lid].append((x, y, z))
             fl = key_flags.get(key)
             if fl:
                 for name, on in fl.items():
                     if on: flagged[name].append((x, y, z))
-    return flagged, area_pts, lock_pts, tile_area, tile_cost, portal_pts, maxx, maxy
+    return flagged, area_pts, lock_pts, tile_area, tile_cost, tile_open, portal_pts, maxx, maxy
 
 def centroid(area_pts, area):
     by_z = area_pts.get(area)
@@ -199,6 +202,14 @@ def build_portals(portal_pts):
     used by cross-floor routing."""
     return {str(z): sorted(set(map(tuple, rc))) for z, rc in portal_pts.items()}
 
+def build_open(tile_open, maxx, maxy):
+    """Per z-level openspace mask: row strings ('1' = openspace, see-through to below).
+    Used by shift-right-click to drop to the level below."""
+    out = {}
+    for z, cells in tile_open.items():
+        out[str(z)] = ["".join("1" if (i, c) in cells else "0" for c in range(maxx)) for i in range(maxy)]
+    return out
+
 def parse_travel(dmm):
     """Travel tiles (cross-map teleport portals): local z -> [(row,col,id,goesto)].
     Matched globally by id so e.g. dun_world 'wretchout1' links to wretch 'wretchin1'."""
@@ -239,8 +250,7 @@ def build_links(travel):
     return links
 
 # ---------------------------------------------------------------- dzi tiling
-def make_dzi(src, base, out, tile, overlap, quality, max_width=None):
-    im = Image.open(src).convert("RGB")
+def make_dzi(im, base, out, tile, overlap, quality, max_width=None):
     if max_width and im.width > max_width:
         im = im.resize((max_width, round(im.height*max_width/im.width)), Image.LANCZOS)
     W, H = im.size
@@ -290,7 +300,7 @@ def main():
     lockmap = parse_keys(args.keys)
 
     dims, names = {}, {}
-    pois, areas, keys, borders, walk, portals, travel = {}, {}, {}, {}, {}, {}, []
+    pois, areas, keys, borders, walk, opens, portals, travel = {}, {}, {}, {}, {}, {}, {}, []
     offset = 0
     for M in maps:
         dmm = M["dmm"]
@@ -303,21 +313,31 @@ def main():
                           if re.search(r'-(\d+)\.png$', os.path.basename(p)))
         if not local_zs:
             print("[skip] no renders for", prefix); continue
-        flagged, area_pts, lock_pts, tile_area, tile_cost, portal_pts, maxx, maxy = parse_map(dmm)
+        flagged, area_pts, lock_pts, tile_area, tile_cost, tile_open, portal_pts, maxx, maxy = parse_map(dmm)
         multi = len(local_zs) > 1
+        comp_prev = None
         for lz in local_zs:
             gz = lz + offset
             png = os.path.join(args.renders, f"{prefix}-{lz}.png")
             print(f"[tiles] world-z{gz} ({name} z{lz}) <- {png}")
-            dims[str(gz)] = make_dzi(png, f"dun_world-z{gz}", args.out, args.tile,
+            im = Image.open(png).convert("RGB"); W, H = im.size
+            if comp_prev is not None:                 # composite the level below through openspace
+                m = Image.new("L", (maxx, maxy), 0); px = m.load()
+                for (i, col) in tile_open.get(lz, ()):
+                    if 0 <= col < maxx and 0 <= i < maxy: px[col, i] = 255
+                im = Image.composite(ImageEnhance.Brightness(comp_prev).enhance(0.7),
+                                     im, m.resize((W, H), Image.NEAREST))
+            dims[str(gz)] = make_dzi(im, f"dun_world-z{gz}", args.out, args.tile,
                                      args.overlap, args.quality, args.max_width or None)
             names[str(gz)] = znames.get(str(lz)) or (name + (f" · z{lz}" if multi else ""))
+            comp_prev = im
         remap = lambda d, off=offset: {str(int(z)+off): v for z, v in d.items()}
         pois.update(remap(build_pois(flagged, area_pts, maxy)))
         areas.update(remap(build_areas(area_pts, maxy)))
         keys.update(remap(build_keys(lock_pts, lockmap, maxy)))
         borders.update(remap(build_borders(tile_area, maxx, maxy)))
         walk.update(remap(build_walk(tile_cost, maxx, maxy)))
+        opens.update(remap(build_open(tile_open, maxx, maxy)))
         portals.update(remap(build_portals(portal_pts)))
         for lz, items in parse_travel(dmm).items():
             for (row, col, pid, goesto) in items:
@@ -339,6 +359,7 @@ def main():
     json.dump(keys,    open(os.path.join(args.out, "keys.json"),    "w"), indent=1)
     json.dump(borders, open(os.path.join(args.out, "borders.json"), "w"), separators=(",", ":"))
     json.dump(walk,    open(os.path.join(args.out, "walk.json"),    "w"), separators=(",", ":"))
+    json.dump(opens,   open(os.path.join(args.out, "openspace.json"), "w"), separators=(",", ":"))
     json.dump(portals, open(os.path.join(args.out, "portals.json"), "w"), separators=(",", ":"))
     json.dump(build_links(travel), open(os.path.join(args.out, "links.json"), "w"), separators=(",", ":"))
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
