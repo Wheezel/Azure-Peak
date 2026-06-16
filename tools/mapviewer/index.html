@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Azure-Peak — dun_world Map (full sprites)</title>
 <style>
   :root { --bg:#0e1014; --ink:#e7eef0; --accent:#7fd1a0; }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
     font-family:system-ui,Segoe UI,Roboto,sans-serif; overflow:hidden; }
-  #osd { position:absolute; inset:0; background:#000; }
+  #osd { position:absolute; inset:0; background:#000; touch-action:none; }
   #bar { position:absolute; top:10px; left:10px; z-index:10; display:flex; gap:8px;
     align-items:center; flex-wrap:wrap; background:rgba(20,24,30,.85);
     padding:8px 10px; border:1px solid #2c3540; border-radius:10px; backdrop-filter:blur(4px); }
@@ -77,6 +77,21 @@
   .rtag { font-size:10px; padding:1px 5px; border-radius:4px; color:#0b0f12; font-weight:600; text-transform:uppercase; }
   .rtag.area{background:#7fd1a0} .rtag.key{background:#e0b54a} .rtag.place{background:#9ec7ff}
   .rz { margin-left:auto; color:#6b7a86; font-size:11px; }
+  /* ---- mobile / small screens ---- */
+  @media (max-width: 700px){
+    #bar { top:6px; left:6px; right:6px; gap:5px; padding:6px 8px; flex-wrap:nowrap;
+      overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    #bar b { font-size:13px; flex:0 0 auto; }
+    .zbtn, .toggle { font-size:13px; padding:7px 10px; flex:0 0 auto; }   /* finger-sized */
+    #poilist { width:44vw; max-width:190px; top:56px; right:6px; max-height:34%; font-size:12px; padding:6px 8px; }
+    #keypanel { width:64vw; max-width:260px; left:6px; top:auto; bottom:8px; max-height:42%; }
+    #routepanel { left:6px; right:6px; transform:none; top:54px; flex-direction:column;
+      align-items:stretch; gap:5px; }
+    #routepanel .rwrap, #routepanel input { width:100%; box-sizing:border-box; }
+    .rdrop { max-height:210px; }
+    #hint { font-size:10px; max-width:66vw; }
+    #credit { display:none; }
+  }
 </style>
 </head>
 <body>
@@ -110,7 +125,7 @@ const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/opensead
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
 let showPins = true, showAreas = false, showKeys = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
-let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, showBorders = false, routeMode = false;
+let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, LINKS = [], linkFrom = {}, showBorders = false, routeMode = false;
 let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
 let routeStart = null, routeEnd = null, routePts = null, routeEntries = [];
 const dropSel = { from: -1, to: -1 };
@@ -301,24 +316,26 @@ function buildPortalSets(){
   for(const z in PORTALS){ const cols = colsOf(z); const s = new Set();
     for(const rc of PORTALS[z]) s.add(rc[0]*cols + rc[1]); portalSet[z] = s; }
 }
+function buildLinkMap(){   // travel-tile teleports: "z,r,c" -> [dest [z,r,c], ...]
+  linkFrom = {};
+  for(const e of LINKS){ const k = e[0][0]+","+e[0][1]+","+e[0][2];
+    (linkFrom[k] = linkFrom[k] || []).push(e[1]); }
+}
 // Cross-floor A*: nodes are (z,r,c); stair/ladder tiles link to walkable
 // landings on the adjacent floor (same tile or a neighbour, covering stair offset).
 function astar3d(start, goal){
-  const Zall = META.levels.map(String);
-  const cols = colsOf(start.z), rows = rowsOf(start.z);
-  let si = Zall.indexOf(String(start.z)), lo = si, hi = si;   // one map = contiguous same-dim z run
-  while(lo > 0 && colsOf(Zall[lo-1]) === cols && rowsOf(Zall[lo-1]) === rows) lo--;
-  while(hi < Zall.length-1 && colsOf(Zall[hi+1]) === cols && rowsOf(Zall[hi+1]) === rows) hi++;
-  const Z = Zall.slice(lo, hi+1);
-  if(Z.indexOf(String(goal.z)) < 0) return null;             // endpoints are on different maps
-  const NZ = Z.length, layer = rows*cols, total = NZ*layer;
+  const Z = META.levels.map(String), NZ = Z.length;
   const zi = {}; Z.forEach((z,i)=> zi[z]=i);
-  const cost = (z,r,c)=>{ const w = WALK[z]; return w ? (w[r].charCodeAt(c)-48) : 0; };
-  const id = (zix,r,c)=> (zix*rows + r)*cols + c;
+  const R = Z.map(rowsOf), C = Z.map(colsOf);
+  const off = [0]; for(let i=0;i<NZ;i++) off.push(off[i] + R[i]*C[i]);   // variable-dim node ids
+  const total = off[NZ];
+  const idOf = (zix,r,c)=> off[zix] + r*C[zix] + c;
+  const decode = (v)=>{ let zix=0; while(zix<NZ-1 && v>=off[zix+1]) zix++; const rem=v-off[zix]; return [zix,(rem/C[zix])|0, rem%C[zix]]; };
+  const cost = (zix,r,c)=>{ const w = WALK[Z[zix]]; return w ? (w[r].charCodeAt(c)-48) : 0; };
   const g = new Float64Array(total).fill(Infinity);
   const came = new Int32Array(total).fill(-1);
-  const gzi = zi[goal.z];
-  const h = (zix,r,c)=> Math.abs(r-goal.r)+Math.abs(c-goal.c)+Math.abs(zix-gzi);
+  const gzi = zi[String(goal.z)];
+  const h = (zix,r,c)=> (zix===gzi ? Math.abs(r-goal.r)+Math.abs(c-goal.c) : 0);   // admissible
   const HN=[], HP=[];
   const push=(n,p)=>{ HN.push(n);HP.push(p);let i=HN.length-1;
     while(i>0){const q=(i-1)>>1;if(HP[q]<=HP[i])break;[HP[q],HP[i]]=[HP[i],HP[q]];[HN[q],HN[i]]=[HN[i],HN[q]];i=q;} };
@@ -326,35 +343,43 @@ function astar3d(start, goal){
     let i=0;const L=HN.length;while(true){let s=i,a=2*i+1,b=2*i+2;
       if(a<L&&HP[a]<HP[s])s=a;if(b<L&&HP[b]<HP[s])s=b;if(s===i)break;
       [HP[s],HP[i]]=[HP[i],HP[s]];[HN[s],HN[i]]=[HN[i],HN[s]];i=s;}return t; };
-  const sId=id(zi[start.z],start.r,start.c), gId=id(zi[goal.z],goal.r,goal.c);
-  g[sId]=0; push(sId, h(zi[start.z],start.r,start.c));
-  const D=[[1,0],[-1,0],[0,1],[0,-1]], VOFF=[[0,0],[1,0],[-1,0],[0,1],[0,-1]], VCOST=8;
+  const sId=idOf(zi[String(start.z)],start.r,start.c), gId=idOf(gzi,goal.r,goal.c);
+  g[sId]=0; push(sId, h(zi[String(start.z)],start.r,start.c));
+  const D=[[1,0],[-1,0],[0,1],[0,-1]], VOFF=[[0,0],[1,0],[-1,0],[0,1],[0,-1]], VCOST=8, TCOST=10;
   while(HN.length){
     const cur=pop(); if(cur===gId) break;
-    const zix=(cur/layer)|0, rem=cur%layer, cr=(rem/cols)|0, cc=rem%cols, z=Z[zix], gc=g[cur];
-    for(const d of D){
+    const dec=decode(cur), zix=dec[0], cr=dec[1], cc=dec[2], z=Z[zix], gc=g[cur];
+    for(const d of D){                                   // walk this floor
       const nr=cr+d[0], nc=cc+d[1];
-      if(nr<0||nc<0||nr>=rows||nc>=cols) continue;
-      const w=cost(z,nr,nc); if(w<=0) continue;
-      const ng=gc+w, ni=id(zix,nr,nc);
+      if(nr<0||nc<0||nr>=R[zix]||nc>=C[zix]) continue;
+      const w=cost(zix,nr,nc); if(w<=0) continue;
+      const ng=gc+w, ni=idOf(zix,nr,nc);
       if(ng<g[ni]){g[ni]=ng;came[ni]=cur;push(ni,ng+h(zix,nr,nc));}
     }
-    if(portalSet[z] && portalSet[z].has(cr*cols+cc)){
+    if(portalSet[z] && portalSet[z].has(cr*C[zix]+cc)){  // stairs/ladders (same-size adjacent floor)
       for(const dz of [-1,1]){
-        const nzix=zix+dz; if(nzix<0||nzix>=NZ) continue; const nz=Z[nzix];
+        const nzix=zix+dz; if(nzix<0||nzix>=NZ) continue;
+        if(R[nzix]!==R[zix] || C[nzix]!==C[zix]) continue;
         for(const o of VOFF){
           const nr=cr+o[0], nc=cc+o[1];
-          if(nr<0||nc<0||nr>=rows||nc>=cols) continue;
-          const w=cost(nz,nr,nc); if(w<=0) continue;
-          const ng=gc+VCOST, ni=id(nzix,nr,nc);
+          if(nr<0||nc<0||nr>=R[nzix]||nc>=C[nzix]) continue;
+          const w=cost(nzix,nr,nc); if(w<=0) continue;
+          const ng=gc+VCOST, ni=idOf(nzix,nr,nc);
           if(ng<g[ni]){g[ni]=ng;came[ni]=cur;push(ni,ng+h(nzix,nr,nc));}
         }
       }
     }
+    const dests = linkFrom[z+","+cr+","+cc];              // travel-tile teleports (cross-map)
+    if(dests) for(const d of dests){
+      const nzix=zi[String(d[0])]; if(nzix==null) continue;
+      const nr=d[1], nc=d[2]; if(nr<0||nc<0||nr>=R[nzix]||nc>=C[nzix]) continue;
+      const ng=gc+TCOST, ni=idOf(nzix,nr,nc);
+      if(ng<g[ni]){g[ni]=ng;came[ni]=cur;push(ni,ng+h(nzix,nr,nc));}
+    }
   }
   if(came[gId]===-1 && gId!==sId) return null;
   const path=[]; let cur=gId;
-  while(cur!==-1){ const zix=(cur/layer)|0, rem=cur%layer; path.push([Z[zix],(rem/cols)|0,rem%cols]); if(cur===sId) break; cur=came[cur]; }
+  while(cur!==-1){ const d=decode(cur); path.push([Z[d[0]],d[1],d[2]]); if(cur===sId) break; cur=came[cur]; }
   return path.reverse();   // [[zString, r, c], ...]
 }
 function computeRoute(){
@@ -523,7 +548,9 @@ viewer.addHandler("canvas-click", function(e){
   const tp = tilePx(), c = Math.floor(img.x/tp), r = Math.floor(img.y/tp);
   if(r<0||c<0||r>=rowsOf(currentZ)||c>=colsOf(currentZ)) return;
   if(!routeMode){
-    // outside route mode: click a stair/ladder to jump to where it leads
+    // outside route mode: click a travel-portal or stair/ladder to jump to where it leads
+    const lk = linkFrom[currentZ+","+r+","+c];
+    if(lk){ const d = lk[0]; flyToTile(d[0], d[1], d[2]); setHint("⟿ travelled to z"+d[0]); return; }
     if(portalSet[currentZ] && portalSet[currentZ].has(r*colsOf(currentZ) + c)) portalJump(currentZ, r, c);
     return;
   }
@@ -577,11 +604,12 @@ Promise.all([
   fetch("keys.json").then(r=>r.json()).catch(()=>({})),
   fetch("borders.json").then(r=>r.json()).catch(()=>({})),
   fetch("walk.json").then(r=>r.json()).catch(()=>({})),
-  fetch("portals.json").then(r=>r.json()).catch(()=>({}))
-]).then(([meta, pois, areas, keys, borders, walk, portals])=>{
-  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals;
+  fetch("portals.json").then(r=>r.json()).catch(()=>({})),
+  fetch("links.json").then(r=>r.json()).catch(()=>([]))
+]).then(([meta, pois, areas, keys, borders, walk, portals, links])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals; LINKS = links;
   DEFAULT_HINT = document.getElementById("hint").textContent;
-  buildPortalSets(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
+  buildPortalSets(); buildLinkMap(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);

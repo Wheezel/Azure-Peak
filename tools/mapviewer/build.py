@@ -199,6 +199,45 @@ def build_portals(portal_pts):
     used by cross-floor routing."""
     return {str(z): sorted(set(map(tuple, rc))) for z, rc in portal_pts.items()}
 
+def parse_travel(dmm):
+    """Travel tiles (cross-map teleport portals): local z -> [(row,col,id,goesto)].
+    Matched globally by id so e.g. dun_world 'wretchout1' links to wretch 'wretchin1'."""
+    txt = open(dmm, errors="replace").read()
+    g = re.search(r'^\(\d+,\d+,\d+\) = \{"', txt, re.M).start()
+    entry = re.compile(r'^"([a-zA-Z]+)" = \((.*?)\)\s*$', re.S | re.M)
+    key_tv = {}
+    for m in entry.finditer(txt[:g]):
+        tv = re.search(r'/obj/structure/fluff/traveltile[A-Za-z0-9_/]*\{([^}]*)\}', m.group(2))
+        if not tv: continue
+        idm = re.search(r'aportalid = "([^"]*)"', tv.group(1))
+        gm = re.search(r'aportalgoesto = "([^"]*)"', tv.group(1))
+        if idm or gm:
+            key_tv[m.group(1)] = (idm.group(1) if idm else None, gm.group(1) if gm else None)
+    out = defaultdict(list)
+    if not key_tv: return out
+    block = re.compile(r'^\((\d+),(\d+),(\d+)\) = \{"\n(.*?)\n"\}', re.S | re.M)
+    for b in block.finditer(txt):
+        x, _, z = int(b.group(1)), int(b.group(2)), int(b.group(3))
+        for i, key in enumerate(b.group(4).split("\n")):
+            key = key.strip()
+            if key in key_tv:
+                pid, goesto = key_tv[key]; out[z].append((i, x-1, pid, goesto))
+    return out
+
+def build_links(travel):
+    """Match travel tiles by id (a tile's goesto -> another tile's id) into
+    directed teleport edges [[z,r,c],[z,r,c]] in global coordinates."""
+    by_id = defaultdict(list)
+    for (z, r, c, pid, goesto) in travel:
+        if pid: by_id[pid].append([z, r, c])
+    links = []
+    for (z, r, c, pid, goesto) in travel:
+        if not goesto: continue
+        for dest in by_id.get(goesto, []):
+            if dest != [z, r, c]:
+                links.append([[z, r, c], dest])
+    return links
+
 # ---------------------------------------------------------------- dzi tiling
 def make_dzi(src, base, out, tile, overlap, quality, max_width=None):
     im = Image.open(src).convert("RGB")
@@ -251,7 +290,7 @@ def main():
     lockmap = parse_keys(args.keys)
 
     dims, names = {}, {}
-    pois, areas, keys, borders, walk, portals = {}, {}, {}, {}, {}, {}
+    pois, areas, keys, borders, walk, portals, travel = {}, {}, {}, {}, {}, {}, []
     offset = 0
     for M in maps:
         dmm = M["dmm"]
@@ -280,6 +319,9 @@ def main():
         borders.update(remap(build_borders(tile_area, maxx, maxy)))
         walk.update(remap(build_walk(tile_cost, maxx, maxy)))
         portals.update(remap(build_portals(portal_pts)))
+        for lz, items in parse_travel(dmm).items():
+            for (row, col, pid, goesto) in items:
+                travel.append((lz + offset, row, col, pid, goesto))
         offset += max(local_zs)
 
     if not dims:
@@ -298,6 +340,7 @@ def main():
     json.dump(borders, open(os.path.join(args.out, "borders.json"), "w"), separators=(",", ":"))
     json.dump(walk,    open(os.path.join(args.out, "walk.json"),    "w"), separators=(",", ":"))
     json.dump(portals, open(os.path.join(args.out, "portals.json"), "w"), separators=(",", ":"))
+    json.dump(build_links(travel), open(os.path.join(args.out, "links.json"), "w"), separators=(",", ":"))
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
     open(os.path.join(args.out, ".nojekyll"), "w").close()
     if args.classic and os.path.isdir(args.classic):

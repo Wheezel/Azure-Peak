@@ -63,15 +63,24 @@ search boxes** — a dropdown of matching **areas**, **keys** (a door it opens),
 and **POIs** (click or arrow-key + Enter); picking one flies you there and routes
 when both ends are set.
 
-Outside route mode, **clicking a staircase or ladder jumps to the floor it leads
-to** (it lands you on the partner stair/landing on the linked z-level).
+Outside route mode, **clicking a staircase, ladder, or travel-portal jumps to
+where it leads** — stairs/ladders to the partner landing on the adjacent floor,
+**travel-tiles to the linked map** (e.g. a `wretch` portal teleports to the
+Wretch Coast).
 
 **All world z-levels are included.** The world stacks several maps at runtime, so
 the viewer renders them in load order with matching z-numbers: **dun_world →
 z1–4**, **dungeon → z5–6**, **wretch_coast → z7–9** (config in `build.py`'s
-`DEFAULT_MAPS`). Each map can have its own dimensions — grids are per-z — so
-routing/borders/portals work within each map (the maps are separate instances,
-not coordinate-aligned, so a single route won't cross between them).
+`DEFAULT_MAPS`). Maps have their own dimensions, so grids are per-z. Cross-map
+travel isn't coordinate-aligned — it goes through **travel tiles**, which
+`build.py` matches by id (a tile's `aportalgoesto` → another's `aportalid`) into
+teleport edges (`links.json`). The router uses stairs/ladders within a map **and
+these teleport links across maps**, so a route can go e.g. from the town out to
+the Wretch Coast.
+
+The viewer is **touch/mobile friendly**: pinch-zoom and drag, finger-sized
+controls, a horizontally-scrollable toolbar, and panels that reflow on small
+screens.
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count
