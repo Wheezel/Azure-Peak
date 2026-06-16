@@ -222,8 +222,9 @@ def parse_travel(dmm):
         if not tv: continue
         idm = re.search(r'aportalid = "([^"]*)"', tv.group(1))
         gm = re.search(r'aportalgoesto = "([^"]*)"', tv.group(1))
+        sm = re.search(r'/obj/structure/fluff/traveltile/([a-z]+)', m.group(2))
         if idm or gm:
-            key_tv[m.group(1)] = (idm.group(1) if idm else None, gm.group(1) if gm else None)
+            key_tv[m.group(1)] = (idm.group(1) if idm else None, gm.group(1) if gm else None, sm.group(1) if sm else "")
     out = defaultdict(list)
     if not key_tv: return out
     block = re.compile(r'^\((\d+),(\d+),(\d+)\) = \{"\n(.*?)\n"\}', re.S | re.M)
@@ -232,22 +233,66 @@ def parse_travel(dmm):
         for i, key in enumerate(b.group(4).split("\n")):
             key = key.strip()
             if key in key_tv:
-                pid, goesto = key_tv[key]; out[z].append((i, x-1, pid, goesto))
+                pid, goesto, sub = key_tv[key]; out[z].append((i, x-1, pid, goesto, sub))
+    return out
+
+def parse_spawns(dmm):
+    """Job/role start landmarks: local z -> [(row,col,role)] from /landmark/start/<role>."""
+    txt = open(dmm, errors="replace").read()
+    g = re.search(r'^\(\d+,\d+,\d+\) = \{"', txt, re.M).start()
+    entry = re.compile(r'^"([a-zA-Z]+)" = \((.*?)\)\s*$', re.S | re.M)
+    key_role = {}
+    for m in entry.finditer(txt[:g]):
+        rm = re.search(r'/obj/effect/landmark/start/([a-z]+)', m.group(2))
+        if rm: key_role[m.group(1)] = rm.group(1)
+    out = defaultdict(list)
+    if not key_role: return out
+    block = re.compile(r'^\((\d+),(\d+),(\d+)\) = \{"\n(.*?)\n"\}', re.S | re.M)
+    for b in block.finditer(txt):
+        x, _, z = int(b.group(1)), int(b.group(2)), int(b.group(3))
+        for i, key in enumerate(b.group(4).split("\n")):
+            key = key.strip()
+            if key in key_role: out[z].append((i, x-1, key_role[key]))
     return out
 
 def build_links(travel):
     """Match travel tiles by id (a tile's goesto -> another tile's id) into
     directed teleport edges [[z,r,c],[z,r,c]] in global coordinates."""
     by_id = defaultdict(list)
-    for (z, r, c, pid, goesto) in travel:
+    for (z, r, c, pid, goesto, sub) in travel:
         if pid: by_id[pid].append([z, r, c])
     links = []
-    for (z, r, c, pid, goesto) in travel:
+    for (z, r, c, pid, goesto, sub) in travel:
         if not goesto: continue
         for dest in by_id.get(goesto, []):
             if dest != [z, r, c]:
                 links.append([[z, r, c], dest])
     return links
+
+LAIR_LABEL = {"wretch": "Wretch Coast", "bandit": "Bandit Camp", "vampire": "Vampire Mansion",
+              "lich": "Lich Lair", "dungeon": "Dungeon Gate", "drow": "Drow Caves", "bathhouse": "Bathhouse Passage"}
+
+def build_lairs(travel):
+    """One pin per travel-portal id (labelled by subtype) at its centroid -> the
+    'lairs / portals of interest' layer. {z: [{type,label,px,py}]}."""
+    groups = defaultdict(list)
+    for (z, r, c, pid, goesto, sub) in travel:
+        if pid: groups[(z, pid)].append((r, c, sub))
+    out = defaultdict(list)
+    for (z, pid), cells in groups.items():
+        sub = cells[0][2] or "portal"
+        row = sum(c[0] for c in cells)/len(cells); col = sum(c[1] for c in cells)/len(cells)
+        out[str(z)].append({"type": sub, "label": LAIR_LABEL.get(sub, sub.capitalize() or "Portal"),
+                            "px": round(col*TILE_PX + TILE_PX/2), "py": round(row*TILE_PX + TILE_PX/2)})
+    return dict(out)
+
+def build_spawns(spawn_pts):
+    """Role start landmarks: {z: [{role,px,py}]} (px,py from row/col directly)."""
+    out = defaultdict(list)
+    for z, items in spawn_pts.items():
+        for (row, col, role) in items:
+            out[str(z)].append({"role": role, "px": col*TILE_PX + TILE_PX//2, "py": row*TILE_PX + TILE_PX//2})
+    return dict(out)
 
 # ---------------------------------------------------------------- dzi tiling
 def make_dzi(im, base, out, tile, overlap, quality, max_width=None):
@@ -300,7 +345,7 @@ def main():
     lockmap = parse_keys(args.keys)
 
     dims, names = {}, {}
-    pois, areas, keys, borders, walk, opens, portals, travel = {}, {}, {}, {}, {}, {}, {}, []
+    pois, areas, keys, borders, walk, opens, portals, spawns, travel = {}, {}, {}, {}, {}, {}, {}, {}, []
     offset = 0
     for M in maps:
         dmm = M["dmm"]
@@ -339,9 +384,10 @@ def main():
         walk.update(remap(build_walk(tile_cost, maxx, maxy)))
         opens.update(remap(build_open(tile_open, maxx, maxy)))
         portals.update(remap(build_portals(portal_pts)))
+        spawns.update(remap(build_spawns(parse_spawns(dmm))))
         for lz, items in parse_travel(dmm).items():
-            for (row, col, pid, goesto) in items:
-                travel.append((lz + offset, row, col, pid, goesto))
+            for (row, col, pid, goesto, sub) in items:
+                travel.append((lz + offset, row, col, pid, goesto, sub))
         offset += max(local_zs)
 
     if not dims:
@@ -362,6 +408,8 @@ def main():
     json.dump(opens,   open(os.path.join(args.out, "openspace.json"), "w"), separators=(",", ":"))
     json.dump(portals, open(os.path.join(args.out, "portals.json"), "w"), separators=(",", ":"))
     json.dump(build_links(travel), open(os.path.join(args.out, "links.json"), "w"), separators=(",", ":"))
+    json.dump(spawns, open(os.path.join(args.out, "spawns.json"), "w"), separators=(",", ":"))
+    json.dump(build_lairs(travel), open(os.path.join(args.out, "lairs.json"), "w"), separators=(",", ":"))
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
     open(os.path.join(args.out, ".nojekyll"), "w").close()
     if args.classic and os.path.isdir(args.classic):

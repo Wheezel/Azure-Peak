@@ -27,6 +27,15 @@
   .klbl { position:absolute; left:9px; top:50%; transform:translateY(-50%); white-space:nowrap;
     background:rgba(16,13,6,.9); border:1px solid; line-height:1.2;
     font-size:11px; padding:1px 5px; border-radius:5px; }
+  .spawnlbl { transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
+    background:rgba(6,14,18,.82); border:1px solid #2f7d8c; color:#bfe9f0;
+    font-size:11px; line-height:1.2; padding:1px 5px; border-radius:5px; }
+  .lairpin { transform:translate(-50%,-50%); position:relative; cursor:pointer; }
+  .lairdot { display:block; width:11px; height:11px; border-radius:50%; border:2px solid #fff;
+    box-shadow:0 0 0 1px #000a, 0 0 8px #000a; }
+  .lairlbl { position:absolute; left:13px; top:50%; transform:translateY(-50%); white-space:nowrap;
+    background:rgba(10,8,14,.9); border:1px solid; color:#f2eef7; font-size:11.5px;
+    padding:1px 6px; border-radius:6px; font-weight:600; }
   #poilist { position:absolute; top:10px; right:10px; z-index:10; width:230px; max-height:80%;
     overflow:auto; background:rgba(20,24,30,.85); border:1px solid #2c3540; border-radius:10px;
     padding:8px 10px; font-size:12.5px; backdrop-filter:blur(4px); }
@@ -102,7 +111,10 @@
   <label class="toggle"><input type="checkbox" id="areachk"> areas</label>
   <label class="toggle"><input type="checkbox" id="borderchk"> borders</label>
   <label class="toggle"><input type="checkbox" id="keychk"> keys</label>
+  <label class="toggle"><input type="checkbox" id="spawnchk"> spawns</label>
+  <label class="toggle"><input type="checkbox" id="lairchk"> lairs</label>
   <label class="toggle"><input type="checkbox" id="routechk"> route</label>
+  <label class="toggle"><input type="checkbox" id="sneakchk"> sneak</label>
   <span class="zbtn" id="clearroute">clear route</span></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="keypanel">
@@ -122,8 +134,12 @@
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
 <script>
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
-let META = null, POIS = {}, AREAS = {}, KEYS = {}, currentZ = null;
-let showPins = true, showAreas = false, showKeys = false, labelEls = [];
+let META = null, POIS = {}, AREAS = {}, KEYS = {}, SPAWNS = {}, LAIRS = {}, currentZ = null;
+let sneakMode = false, doorSet = {};
+const SNEAK_REMAP = {1:9, 2:5, 3:2, 5:3};   // sneak: roads/paving expensive, off-road cheap
+const LAIRCOLORS = {vampire:"#c0392b", lich:"#8e44ad", bandit:"#e67e22", wretch:"#16a085",
+                    dungeon:"#7f8c8d", drow:"#5d3a9b", bathhouse:"#2980b9"};
+let showPins = true, showAreas = false, showKeys = false, showSpawns = false, showLairs = false, labelEls = [];
 let keyIndex = [], _keyCycle = {}, pendingView = null;
 let BORDERS = {}, WALK = {}, PORTALS = {}, portalSet = {}, LINKS = [], linkFrom = {}, OPEN = {}, showBorders = false, routeMode = false;
 let svgEl = null, gBorders = null, gRoute = null, DEFAULT_HINT = "";
@@ -211,6 +227,21 @@ function renderOverlays(){
           placement: OpenSeadragon.Placement.CENTER });
         labelEls.push({ el: lbl, px: k.px, w: 32, thr: 24 });
       } catch(ex){ showErr("key: "+ex.message); }
+    });
+  if(showSpawns)
+    (SPAWNS[currentZ] || []).forEach(s=> addLabel("spawnlbl", s.role, s.px, s.py, 32, 26));
+  if(showLairs)
+    (LAIRS[currentZ] || []).forEach(l=>{
+      try {
+        const col = LAIRCOLORS[l.type] || "#bb79e0";
+        const el = document.createElement("div"); el.className = "lairpin";
+        el.innerHTML = '<span class="lairdot" style="background:'+col+'"></span>'
+          + '<span class="lairlbl" style="border-color:'+col+'">'+l.label+'</span>';
+        el.onclick = ()=> flyToTile(currentZ, Math.floor(l.py/srcTile()), Math.floor(l.px/srcTile()));
+        viewer.addOverlay({ element: el,
+          location: viewer.viewport.imageToViewportCoordinates(l.px, l.py),
+          placement: OpenSeadragon.Placement.CENTER });
+      } catch(ex){ showErr("lair: "+ex.message); }
     });
 }
 
@@ -321,6 +352,12 @@ function buildLinkMap(){   // travel-tile teleports: "z,r,c" -> [dest [z,r,c], .
   for(const e of LINKS){ const k = e[0][0]+","+e[0][1]+","+e[0][2];
     (linkFrom[k] = linkFrom[k] || []).push(e[1]); }
 }
+function buildDoorSets(){   // locked-door tiles per z, so sneak routing can avoid them
+  doorSet = {};
+  for(const z in KEYS){ const cols = colsOf(z); const s = new Set();
+    for(const k of KEYS[z]) s.add(Math.floor(k.py/srcTile())*cols + Math.floor(k.px/srcTile()));
+    doorSet[z] = s; }
+}
 // Cross-floor A*: nodes are (z,r,c); stair/ladder tiles link to walkable
 // landings on the adjacent floor (same tile or a neighbour, covering stair offset).
 function astar3d(start, goal){
@@ -331,7 +368,12 @@ function astar3d(start, goal){
   const total = off[NZ];
   const idOf = (zix,r,c)=> off[zix] + r*C[zix] + c;
   const decode = (v)=>{ let zix=0; while(zix<NZ-1 && v>=off[zix+1]) zix++; const rem=v-off[zix]; return [zix,(rem/C[zix])|0, rem%C[zix]]; };
-  const cost = (zix,r,c)=>{ const w = WALK[Z[zix]]; return w ? (w[r].charCodeAt(c)-48) : 0; };
+  const cost = (zix,r,c)=>{ const w = WALK[Z[zix]]; if(!w) return 0;
+    const base = w[r].charCodeAt(c)-48; if(base<=0) return 0;
+    if(!sneakMode) return base;
+    let sc = SNEAK_REMAP[base] || base;                       // sneak: avoid main roads/traffic
+    const ds = doorSet[Z[zix]]; if(ds && ds.has(r*C[zix]+c)) sc += 12;   // and locked doors if possible
+    return sc; };
   const g = new Float64Array(total).fill(Infinity);
   const came = new Int32Array(total).fill(-1);
   const gzi = zi[String(goal.z)];
@@ -494,14 +536,33 @@ function flyTo(p){
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
 }
 function loadZ(z){
-  // remember where we're looking so switching floors keeps the same spot in view
-  // (all z-levels share the same dimensions/grid, so x,y lines up — handy for stairs)
-  if(viewer.world.getItemCount() > 0)
+  // keep the same spot in view when switching floors of the SAME map (handy for stairs)
+  pendingView = null;
+  if(viewer.world.getItemCount() > 0 && currentZ != null &&
+     colsOf(z) === colsOf(currentZ) && rowsOf(z) === rowsOf(currentZ))
     pendingView = { center: viewer.viewport.getCenter(), zoom: viewer.viewport.getZoom() };
   currentZ = String(z);
   document.querySelectorAll(".zbtn").forEach(b=>b.classList.toggle("active", b.dataset.z===currentZ));
   viewer.open(tileSourceFor(currentZ));
 }
+// ---- shareable deep-links (#z=..&x=..&y=..&zoom=..) ----
+function readHash(){ const h={}; location.hash.replace(/^#/,"").split("&").forEach(kv=>{
+  const i=kv.indexOf("="); if(i>0) h[kv.slice(0,i)]=kv.slice(i+1); }); return h; }
+function applyHash(){
+  const h=readHash(), z=+h.z; if(!z || !META.levels.includes(z)) return false;
+  loadZ(z);
+  viewer.addOnceHandler("open", ()=>{ try {
+    if(h.x && h.y) viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(+h.x, +h.y), true);
+    if(h.zoom) viewer.viewport.zoomTo(+h.zoom, null, true);
+  } catch(e){} });
+  return true;
+}
+let _hashT=null;
+function updateHash(){ if(!META || currentZ==null) return;
+  const img = viewer.viewport.viewportToImageCoordinates(viewer.viewport.getCenter());
+  try { history.replaceState(null, "", "#z="+currentZ+"&x="+Math.round(img.x)+"&y="+Math.round(img.y)
+    +"&zoom="+viewer.viewport.getZoom().toFixed(2)); } catch(e){} }
+function scheduleHash(){ if(_hashT) clearTimeout(_hashT); _hashT=setTimeout(updateHash, 400); }
 
 // ---- Keys table + search ----
 function buildKeyIndex(){
@@ -553,6 +614,7 @@ viewer.addHandler("open", ()=>{
   updateAreaVis();
 });
 viewer.addHandler("update-viewport", scheduleAreaVis);
+viewer.addHandler("animation-finish", scheduleHash);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
 viewer.addHandler("canvas-click", function(e){
   if(!e.quick || !META || !META.dims) return;
@@ -602,6 +664,12 @@ document.getElementById("keychk").onchange = e=>{ showKeys = e.target.checked;
   renderOverlays(); updateAreaVis(); };
 document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value);
 document.getElementById("borderchk").onchange = e=>{ showBorders = e.target.checked; drawBorders(); };
+document.getElementById("spawnchk").onchange = e=>{ showSpawns = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("lairchk").onchange = e=>{ showLairs = e.target.checked; renderOverlays(); updateAreaVis(); };
+document.getElementById("sneakchk").onchange = e=>{ sneakMode = e.target.checked;
+  if(routeStart && routeEnd){ computeRoute(); drawRoute(); }
+  setHint(sneakMode ? "Sneak routing: avoiding roads, traffic & locked doors."
+                    : (routeMode ? "Route mode: search From/To, or click start then destination." : DEFAULT_HINT)); };
 document.getElementById("routechk").onchange = e=>{ routeMode = e.target.checked;
   document.getElementById("osd").style.cursor = routeMode ? "crosshair" : "";
   document.getElementById("routepanel").style.display = routeMode ? "flex" : "none";
@@ -627,14 +695,17 @@ Promise.all([
   fetch("walk.json").then(r=>r.json()).catch(()=>({})),
   fetch("portals.json").then(r=>r.json()).catch(()=>({})),
   fetch("links.json").then(r=>r.json()).catch(()=>([])),
-  fetch("openspace.json").then(r=>r.json()).catch(()=>({}))
-]).then(([meta, pois, areas, keys, borders, walk, portals, links, opens])=>{
-  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals; LINKS = links; OPEN = opens;
+  fetch("openspace.json").then(r=>r.json()).catch(()=>({})),
+  fetch("spawns.json").then(r=>r.json()).catch(()=>({})),
+  fetch("lairs.json").then(r=>r.json()).catch(()=>({}))
+]).then(([meta, pois, areas, keys, borders, walk, portals, links, opens, spawns, lairs])=>{
+  META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals;
+  LINKS = links; OPEN = opens; SPAWNS = spawns; LAIRS = lairs;
   DEFAULT_HINT = document.getElementById("hint").textContent;
-  buildPortalSets(); buildLinkMap(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
+  buildPortalSets(); buildLinkMap(); buildDoorSets(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
-  loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);
+  if(!applyHash()) loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);
 }).catch(e=>showErr("Could not load meta.json — was the site built by the workflow? ("+e.message+")"));
 </script>
 </body>

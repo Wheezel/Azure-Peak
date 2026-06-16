@@ -73,6 +73,15 @@ the level below shows through it (dimmed for depth, composited recursively in
 `build.py`). And **shift-right-clicking openspace drops the view to the level
 below** at that spot (`openspace.json` marks the see-through tiles).
 
+More layers and modes:
+- **spawns** — job/role start landmarks (`spawns.json`), labelled by role.
+- **lairs** — antagonist lairs / cross-map portals (Vampire Mansion, Lich Lair,
+  Bandit Camp, Wretch Coast, Dungeon Gate…); click one to fly to it (`lairs.json`).
+- **sneak** routing — avoids main roads, high-traffic paving, and locked doors
+  (inverts the walk-cost weighting + penalises door tiles).
+- **deep-links** — the URL hash tracks your `z`/position/zoom, so copying the URL
+  shares the exact view.
+
 **All world z-levels are included.** The world stacks several maps at runtime, so
 the viewer renders them in load order with matching z-numbers: **dun_world →
 z1–4**, **dungeon → z5–6**, **wretch_coast → z7–9** (config in `build.py`'s
