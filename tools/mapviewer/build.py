@@ -34,13 +34,61 @@ def turf_cost(t):
     if "floor" in t: return 5
     return 0
 
+# Static density map for /obj/structure types, parsed from the DM code so we know
+# which structures actually block movement (vs. decorative ones). Proc bodies are
+# skipped so a `density = FALSE` inside e.g. obj_break() isn't misread as the type's
+# default. Returns {full_type: bool} for the types that set density explicitly.
+def build_density_map(code_dir="code"):
+    dens = {}
+    if not os.path.isdir(code_dir):
+        return dens
+    typedef   = re.compile(r'^(/(?:obj|turf|atom)/[A-Za-z0-9_/]+)\s*$')
+    densline  = re.compile(r'^\s+density\s*=\s*(TRUE|FALSE|1|0)\b')
+    procstart = re.compile(r'^\s*/(?:obj|turf|atom|mob|datum)[A-Za-z0-9_/]*\(')
+    for root, _, fnames in os.walk(code_dir):
+        for fn in fnames:
+            if not fn.endswith(".dm"): continue
+            cur = None
+            for line in open(os.path.join(root, fn), errors="replace"):
+                if procstart.match(line): cur = None; continue   # entering a proc/verb body
+                m = typedef.match(line)
+                if m: cur = m.group(1); continue
+                d = densline.match(line)
+                if d and cur: dens[cur] = d.group(1) in ("TRUE", "1")
+    return dens
+
+def resolve_density(path, dens):
+    """Nearest explicit-density ancestor of a type path (DM inheritance); default non-dense."""
+    while path:
+        if path in dens: return dens[path]
+        i = path.rfind("/")
+        if i <= 0: break
+        path = path[:i]
+    return False
+
+# Dense barriers that sit on a walkable floor turf and must be broken/opened to get
+# through — fences, windows, bars/portcullises, barricades. Block these for routing.
+# A few variants are walkable: floor grilles & decorative pipes (density FALSE), and
+# the runtime-opened forms (cut-through fences, opened gates/shutters) whose density
+# flips to FALSE in Initialize(), so they're excluded by name.
+_BARRIER_FAM = re.compile(r'/obj/structure/(?:roguewindow|fence|bars|barricade)[A-Za-z0-9_/]*')
+def is_barrier(body, dens):
+    for m in _BARRIER_FAM.finditer(body):
+        p = m.group(0)
+        if p.endswith("/open") or p.endswith("/opened") or "/cut/large" in p:
+            continue                          # runtime-opened / walked-through variant
+        if resolve_density(p, dens):
+            return True
+    return False
+
 # ---------------------------------------------------------------- map parsing
-def parse_map(path):
+def parse_map(path, density=None):
+    density = density or {}
     txt = open(path, errors="replace").read()
     gridstart = re.search(r'^\(\d+,\d+,\d+\) = \{"', txt, re.M).start()
     dtxt = txt[:gridstart]
     entry = re.compile(r'^"([a-zA-Z]+)" = \((.*?)\)\s*$', re.S | re.M)
-    key_area, key_flags, key_locks, key_cost, key_portal, key_open = {}, {}, {}, {}, {}, {}
+    key_area, key_flags, key_locks, key_cost, key_portal, key_open, key_barrier = {}, {}, {}, {}, {}, {}, {}
     for m in entry.finditer(dtxt):
         k, body = m.group(1), m.group(2)
         ar = re.findall(r'/area/[A-Za-z0-9_/]+', body)
@@ -49,6 +97,7 @@ def parse_map(path):
         if locks: key_locks[k] = locks
         tu = re.findall(r'/turf/[A-Za-z0-9_/]+', body)
         key_cost[k] = turf_cost(tu[-1] if tu else "")
+        key_barrier[k] = is_barrier(body, density)
         key_portal[k] = ("/obj/structure/stairs" in body) or ("/obj/structure/ladder" in body)
         key_open[k] = "/turf/open/transparent/openspace" in body
         key_flags[k] = {
@@ -79,7 +128,7 @@ def parse_map(path):
                 aid = area_ids.get(fa)
                 if aid is None: aid = area_ids[fa] = len(area_ids)
                 tile_area[z][(i, col)] = aid
-            cost = key_cost.get(key, 0)
+            cost = 0 if key_barrier.get(key) else key_cost.get(key, 0)
             if cost: tile_cost[z][(i, col)] = cost
             if key_portal.get(key): portal_pts[z].append((i, col))
             if key_open.get(key): tile_open[z].add((i, col))
@@ -337,12 +386,16 @@ def main():
     ap.add_argument("--classic", default="", help="optional dir to copy in under /classic")
     ap.add_argument("--keys", default="code/game/objects/items/rogueitems/keys.dm",
                     help="path to keys.dm for the lockid -> key-name mapping")
+    ap.add_argument("--code", default="code",
+                    help="DM source dir, scanned for structure density (barrier blocking in routing)")
     args = ap.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
     os.makedirs(args.out, exist_ok=True)
     maps = json.loads(args.maps) if args.maps else DEFAULT_MAPS
     lockmap = parse_keys(args.keys)
+    density = build_density_map(args.code)
+    print(f"[density] {len(density)} structure types with explicit density from {args.code}")
 
     dims, names = {}, {}
     pois, areas, keys, borders, walk, opens, portals, spawns, travel = {}, {}, {}, {}, {}, {}, {}, {}, []
@@ -358,7 +411,7 @@ def main():
                           if re.search(r'-(\d+)\.png$', os.path.basename(p)))
         if not local_zs:
             print("[skip] no renders for", prefix); continue
-        flagged, area_pts, lock_pts, tile_area, tile_cost, tile_open, portal_pts, maxx, maxy = parse_map(dmm)
+        flagged, area_pts, lock_pts, tile_area, tile_cost, tile_open, portal_pts, maxx, maxy = parse_map(dmm, density)
         multi = len(local_zs) > 1
         comp_prev = None
         for lz in local_zs:

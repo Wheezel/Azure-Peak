@@ -114,7 +114,6 @@
   <label class="toggle"><input type="checkbox" id="spawnchk"> spawns</label>
   <label class="toggle"><input type="checkbox" id="lairchk"> lairs</label>
   <label class="toggle"><input type="checkbox" id="routechk"> route</label>
-  <label class="toggle"><input type="checkbox" id="sneakchk"> sneak</label>
   <span class="zbtn" id="clearroute">clear route</span></div>
 <div id="poilist"><h4>Points of interest</h4><div id="poiitems"></div></div>
 <div id="keypanel">
@@ -135,8 +134,6 @@
 <script>
 const OSD_IMG = "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/";
 let META = null, POIS = {}, AREAS = {}, KEYS = {}, SPAWNS = {}, LAIRS = {}, currentZ = null;
-let sneakMode = false, doorSet = {};
-const SNEAK_REMAP = {1:9, 2:5, 3:2, 5:3};   // sneak: roads/paving expensive, off-road cheap
 const LAIRCOLORS = {vampire:"#c0392b", lich:"#8e44ad", bandit:"#e67e22", wretch:"#16a085",
                     dungeon:"#7f8c8d", drow:"#5d3a9b", bathhouse:"#2980b9"};
 let showPins = true, showAreas = false, showKeys = false, showSpawns = false, showLairs = false, labelEls = [];
@@ -352,12 +349,6 @@ function buildLinkMap(){   // travel-tile teleports: "z,r,c" -> [dest [z,r,c], .
   for(const e of LINKS){ const k = e[0][0]+","+e[0][1]+","+e[0][2];
     (linkFrom[k] = linkFrom[k] || []).push(e[1]); }
 }
-function buildDoorSets(){   // locked-door tiles per z, so sneak routing can avoid them
-  doorSet = {};
-  for(const z in KEYS){ const cols = colsOf(z); const s = new Set();
-    for(const k of KEYS[z]) s.add(Math.floor(k.py/srcTile())*cols + Math.floor(k.px/srcTile()));
-    doorSet[z] = s; }
-}
 // Cross-floor A*: nodes are (z,r,c); stair/ladder tiles link to walkable
 // landings on the adjacent floor (same tile or a neighbour, covering stair offset).
 function astar3d(start, goal){
@@ -368,12 +359,7 @@ function astar3d(start, goal){
   const total = off[NZ];
   const idOf = (zix,r,c)=> off[zix] + r*C[zix] + c;
   const decode = (v)=>{ let zix=0; while(zix<NZ-1 && v>=off[zix+1]) zix++; const rem=v-off[zix]; return [zix,(rem/C[zix])|0, rem%C[zix]]; };
-  const cost = (zix,r,c)=>{ const w = WALK[Z[zix]]; if(!w) return 0;
-    const base = w[r].charCodeAt(c)-48; if(base<=0) return 0;
-    if(!sneakMode) return base;
-    let sc = SNEAK_REMAP[base] || base;                       // sneak: avoid main roads/traffic
-    const ds = doorSet[Z[zix]]; if(ds && ds.has(r*C[zix]+c)) sc += 12;   // and locked doors if possible
-    return sc; };
+  const cost = (zix,r,c)=>{ const w = WALK[Z[zix]]; return w ? (w[r].charCodeAt(c)-48) : 0; };
   const g = new Float64Array(total).fill(Infinity);
   const came = new Int32Array(total).fill(-1);
   const gzi = zi[String(goal.z)];
@@ -666,10 +652,6 @@ document.getElementById("keysearch").oninput = e=> renderKeyTable(e.target.value
 document.getElementById("borderchk").onchange = e=>{ showBorders = e.target.checked; drawBorders(); };
 document.getElementById("spawnchk").onchange = e=>{ showSpawns = e.target.checked; renderOverlays(); updateAreaVis(); };
 document.getElementById("lairchk").onchange = e=>{ showLairs = e.target.checked; renderOverlays(); updateAreaVis(); };
-document.getElementById("sneakchk").onchange = e=>{ sneakMode = e.target.checked;
-  if(routeStart && routeEnd){ computeRoute(); drawRoute(); }
-  setHint(sneakMode ? "Sneak routing: avoiding roads, traffic & locked doors."
-                    : (routeMode ? "Route mode: search From/To, or click start then destination." : DEFAULT_HINT)); };
 document.getElementById("routechk").onchange = e=>{ routeMode = e.target.checked;
   document.getElementById("osd").style.cursor = routeMode ? "crosshair" : "";
   document.getElementById("routepanel").style.display = routeMode ? "flex" : "none";
@@ -702,7 +684,7 @@ Promise.all([
   META = meta; POIS = pois; AREAS = areas; KEYS = keys; BORDERS = borders; WALK = walk; PORTALS = portals;
   LINKS = links; OPEN = opens; SPAWNS = spawns; LAIRS = lairs;
   DEFAULT_HINT = document.getElementById("hint").textContent;
-  buildPortalSets(); buildLinkMap(); buildDoorSets(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
+  buildPortalSets(); buildLinkMap(); keyIndex = buildKeyIndex(); buildRouteIndex(); buildButtons();
   if(meta.generated) document.getElementById("credit").textContent =
     "full sprite render · built "+meta.generated+(meta.commit? " · "+meta.commit : "");
   if(!applyHash()) loadZ(meta.levels.includes(2) ? 2 : meta.levels[0]);

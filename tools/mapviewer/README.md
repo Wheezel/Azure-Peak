@@ -54,6 +54,10 @@ area/building (drawn from area boundaries, crisp at any zoom); and a **route**
 mode — click a start then a destination and it draws a **Google-Maps-style path**
 that prefers roads/paths over open ground and avoids walls/water (A* over a
 per-tile walk-cost grid derived from turf types), with a **clear route** button.
+Routing won't send you **through barriers you'd have to break or force open** —
+fences, windows, bars/portcullises, closed shutters and barricades are blocked
+(their density is read straight from the DM source), while genuinely passable
+bits (floor grilles, decorative pipes, opened gates/shutters) stay walkable.
 Routing is **cross-floor**: stairs/ladders are extracted as floor links
 (`portals.json`), so a path can go up/down levels — it draws the portion on the
 current floor and drops **↑/↓ markers** where it changes z; since the view is
@@ -77,8 +81,6 @@ More layers and modes:
 - **spawns** — job/role start landmarks (`spawns.json`), labelled by role.
 - **lairs** — antagonist lairs / cross-map portals (Vampire Mansion, Lich Lair,
   Bandit Camp, Wretch Coast, Dungeon Gate…); click one to fly to it (`lairs.json`).
-- **sneak** routing — avoids main roads, high-traffic paving, and locked doors
-  (inverts the walk-cost weighting + penalises door tiles).
 - **deep-links** — the URL hash tracks your `z`/position/zoom, so copying the URL
   shares the exact view.
 
@@ -120,7 +122,9 @@ python -m http.server 8000 --directory _site
 
 `build.py` options: `--max-width N` (downscale for a lighter build),
 `--quality` (WebP quality, default 82), `--tile` (tile size, default 1024),
-`--classic DIR` (also publish another viewer dir under `/classic`).
+`--classic DIR` (also publish another viewer dir under `/classic`),
+`--code DIR` (DM source scanned for structure density, so routing blocks
+fences/windows/bars/barricades; default `code`).
 
 ## Files
 
