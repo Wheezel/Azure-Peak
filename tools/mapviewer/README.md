@@ -58,6 +58,10 @@ Routing won't send you **through barriers you'd have to break or force open** �
 fences, windows, bars/portcullises, closed shutters and barricades are blocked
 (their density is read straight from the DM source), while genuinely passable
 bits (floor grilles, decorative pipes, opened gates/shutters) stay walkable.
+**Doors are always routable** — including locked ones, and even doors reinforced
+with a portcullis — since a door is an intended way through (it overrides any
+barrier sharing its tile). Only true voids stop a door tile (a trapdoor over
+openspace or water).
 Routing is **cross-floor**: stairs/ladders are extracted as floor links
 (`portals.json`), so a path can go up/down levels — it draws the portion on the
 current floor and drops **↑/↓ markers** where it changes z; since the view is

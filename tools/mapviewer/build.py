@@ -71,8 +71,13 @@ def resolve_density(path, dens):
 # A few variants are walkable: floor grilles & decorative pipes (density FALSE), and
 # the runtime-opened forms (cut-through fences, opened gates/shutters) whose density
 # flips to FALSE in Initialize(), so they're excluded by name.
+# A door on the tile (even locked, or reinforced with a portcullis) is an intended
+# passage, so it overrides any co-located barrier — you route through doors.
 _BARRIER_FAM = re.compile(r'/obj/structure/(?:roguewindow|fence|bars|barricade)[A-Za-z0-9_/]*')
+_DOOR = re.compile(r'/obj/structure/(?:mineral_door|floordoor)[A-Za-z0-9_/]*')
 def is_barrier(body, dens):
+    if _DOOR.search(body):
+        return False                          # door tile = passage (locked/barred is still a door)
     for m in _BARRIER_FAM.finditer(body):
         p = m.group(0)
         if p.endswith("/open") or p.endswith("/opened") or "/cut/large" in p:
