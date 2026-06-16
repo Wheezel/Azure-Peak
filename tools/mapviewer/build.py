@@ -220,12 +220,22 @@ def make_dzi(src, base, out, tile, overlap, quality, max_width=None):
                 lvl.crop(box).save(os.path.join(ld, f"{c}_{r}.webp"), quality=quality, method=4)
     return [W, H]
 
+# Maps stacked into the dun_world world, in runtime load order. Each map's
+# z-levels are appended after the previous, matching the game's z assignment:
+# dun_world -> world z1-4, dungeon -> z5-6, wretch_coast -> z7-9.
+DEFAULT_MAPS = [
+    {"dmm": "_maps/map_files/dun_world/dun_world.dmm", "name": "dun world",
+     "znames": {"1": "underground", "2": "surface / town", "3": "mountains / bog", "4": "high ground"}},
+    {"dmm": "_maps/map_files/otherz/dungeon.dmm", "name": "dungeon"},
+    {"dmm": "_maps/map_files/otherz/wretch_coast.dmm", "name": "wretch coast"},
+]
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--renders", required=True)
-    ap.add_argument("--map", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--maps", default="", help="JSON list of {dmm,name[,znames]}; default = dun_world + otherz")
     ap.add_argument("--tile", type=int, default=1024)
     ap.add_argument("--overlap", type=int, default=1)
     ap.add_argument("--quality", type=int, default=82)
@@ -237,49 +247,62 @@ def main():
 
     here = os.path.dirname(os.path.abspath(__file__))
     os.makedirs(args.out, exist_ok=True)
-    renders = sorted(glob.glob(os.path.join(args.renders, "*-*.png")))
-    if not renders:
-        sys.exit(f"no renders found in {args.renders}")
-
-    flagged, area_pts, lock_pts, tile_area, tile_cost, portal_pts, maxx, maxy = parse_map(args.map)
+    maps = json.loads(args.maps) if args.maps else DEFAULT_MAPS
     lockmap = parse_keys(args.keys)
 
-    dims = {}
-    for png in renders:
-        m = re.search(r'-(\d+)\.png$', os.path.basename(png))
-        if not m: continue
-        z = int(m.group(1))
-        print(f"[tiles] z{z} <- {png}")
-        dims[str(z)] = make_dzi(png, f"dun_world-z{z}", args.out, args.tile,
-                                args.overlap, args.quality, args.max_width or None)
+    dims, names = {}, {}
+    pois, areas, keys, borders, walk, portals = {}, {}, {}, {}, {}, {}
+    offset = 0
+    for M in maps:
+        dmm = M["dmm"]
+        if not os.path.isfile(dmm):
+            print("[skip] missing map", dmm); continue
+        prefix = os.path.splitext(os.path.basename(dmm))[0]
+        name, znames = M.get("name", prefix), M.get("znames", {})
+        local_zs = sorted(int(re.search(r'-(\d+)\.png$', os.path.basename(p)).group(1))
+                          for p in glob.glob(os.path.join(args.renders, f"{prefix}-*.png"))
+                          if re.search(r'-(\d+)\.png$', os.path.basename(p)))
+        if not local_zs:
+            print("[skip] no renders for", prefix); continue
+        flagged, area_pts, lock_pts, tile_area, tile_cost, portal_pts, maxx, maxy = parse_map(dmm)
+        multi = len(local_zs) > 1
+        for lz in local_zs:
+            gz = lz + offset
+            png = os.path.join(args.renders, f"{prefix}-{lz}.png")
+            print(f"[tiles] world-z{gz} ({name} z{lz}) <- {png}")
+            dims[str(gz)] = make_dzi(png, f"dun_world-z{gz}", args.out, args.tile,
+                                     args.overlap, args.quality, args.max_width or None)
+            names[str(gz)] = znames.get(str(lz)) or (name + (f" · z{lz}" if multi else ""))
+        remap = lambda d, off=offset: {str(int(z)+off): v for z, v in d.items()}
+        pois.update(remap(build_pois(flagged, area_pts, maxy)))
+        areas.update(remap(build_areas(area_pts, maxy)))
+        keys.update(remap(build_keys(lock_pts, lockmap, maxy)))
+        borders.update(remap(build_borders(tile_area, maxx, maxy)))
+        walk.update(remap(build_walk(tile_cost, maxx, maxy)))
+        portals.update(remap(build_portals(portal_pts)))
+        offset += max(local_zs)
 
+    if not dims:
+        sys.exit("no maps rendered")
     meta = {
         "levels": sorted(int(z) for z in dims),
-        "dims": dims,
-        "tile": args.tile, "overlap": args.overlap,
-        "grid": {"cols": maxx, "rows": maxy},
-        "names": {"1": "underground", "2": "surface / town", "3": "mountains / bog", "4": "high ground"},
+        "dims": dims, "names": names,
+        "tile": args.tile, "overlap": args.overlap, "src_tile": TILE_PX,
         "generated": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
         "commit": (os.environ.get("GITHUB_SHA", "")[:7]),
     }
-    json.dump(meta, open(os.path.join(args.out, "meta.json"), "w"), indent=1)
-    json.dump(build_pois(flagged, area_pts, maxy),
-              open(os.path.join(args.out, "pois.json"), "w"), indent=1)
-    json.dump(build_areas(area_pts, maxy),
-              open(os.path.join(args.out, "areas.json"), "w"), indent=1)
-    json.dump(build_keys(lock_pts, lockmap, maxy),
-              open(os.path.join(args.out, "keys.json"), "w"), indent=1)
-    json.dump(build_borders(tile_area, maxx, maxy),
-              open(os.path.join(args.out, "borders.json"), "w"), separators=(",", ":"))
-    json.dump(build_walk(tile_cost, maxx, maxy),
-              open(os.path.join(args.out, "walk.json"), "w"), separators=(",", ":"))
-    json.dump(build_portals(portal_pts),
-              open(os.path.join(args.out, "portals.json"), "w"), separators=(",", ":"))
+    json.dump(meta,    open(os.path.join(args.out, "meta.json"),    "w"), indent=1)
+    json.dump(pois,    open(os.path.join(args.out, "pois.json"),    "w"), indent=1)
+    json.dump(areas,   open(os.path.join(args.out, "areas.json"),   "w"), indent=1)
+    json.dump(keys,    open(os.path.join(args.out, "keys.json"),    "w"), indent=1)
+    json.dump(borders, open(os.path.join(args.out, "borders.json"), "w"), separators=(",", ":"))
+    json.dump(walk,    open(os.path.join(args.out, "walk.json"),    "w"), separators=(",", ":"))
+    json.dump(portals, open(os.path.join(args.out, "portals.json"), "w"), separators=(",", ":"))
     shutil.copy(os.path.join(here, "index.html"), os.path.join(args.out, "index.html"))
     open(os.path.join(args.out, ".nojekyll"), "w").close()
     if args.classic and os.path.isdir(args.classic):
         shutil.copytree(args.classic, os.path.join(args.out, "classic"), dirs_exist_ok=True)
-    print("[done]", args.out, "levels", meta["levels"], "dims", dims)
+    print("[done]", args.out, "levels", meta["levels"])
 
 if __name__ == "__main__":
     main()

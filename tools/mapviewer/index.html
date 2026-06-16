@@ -231,7 +231,10 @@ function drawBorders(){
 }
 
 // ---- Routing (Google-Maps-style path) ----
-function tilePx(){ return META.dims[currentZ][0] / META.grid.cols; }
+function srcTile(){ return (META && META.src_tile) || 32; }
+function colsOf(z){ return Math.round(META.dims[String(z)][0] / srcTile()); }
+function rowsOf(z){ return Math.round(META.dims[String(z)][1] / srcTile()); }
+function tilePx(){ return srcTile(); }   // every z renders at the same px/tile
 function drawRoute(){
   if(!gRoute) return;
   gRoute.textContent = "";
@@ -294,14 +297,20 @@ function snapWalkable(walk, r, c){
   return null;
 }
 function buildPortalSets(){
-  portalSet = {}; const cols = (META.grid && META.grid.cols) || 0;
-  for(const z in PORTALS){ const s = new Set(); for(const rc of PORTALS[z]) s.add(rc[0]*cols + rc[1]); portalSet[z] = s; }
+  portalSet = {};
+  for(const z in PORTALS){ const cols = colsOf(z); const s = new Set();
+    for(const rc of PORTALS[z]) s.add(rc[0]*cols + rc[1]); portalSet[z] = s; }
 }
 // Cross-floor A*: nodes are (z,r,c); stair/ladder tiles link to walkable
 // landings on the adjacent floor (same tile or a neighbour, covering stair offset).
 function astar3d(start, goal){
-  const Z = META.levels.map(String);
-  const rows = WALK[start.z].length, cols = WALK[start.z][0].length;
+  const Zall = META.levels.map(String);
+  const cols = colsOf(start.z), rows = rowsOf(start.z);
+  let si = Zall.indexOf(String(start.z)), lo = si, hi = si;   // one map = contiguous same-dim z run
+  while(lo > 0 && colsOf(Zall[lo-1]) === cols && rowsOf(Zall[lo-1]) === rows) lo--;
+  while(hi < Zall.length-1 && colsOf(Zall[hi+1]) === cols && rowsOf(Zall[hi+1]) === rows) hi++;
+  const Z = Zall.slice(lo, hi+1);
+  if(Z.indexOf(String(goal.z)) < 0) return null;             // endpoints are on different maps
   const NZ = Z.length, layer = rows*cols, total = NZ*layer;
   const zi = {}; Z.forEach((z,i)=> zi[z]=i);
   const cost = (z,r,c)=>{ const w = WALK[z]; return w ? (w[r].charCodeAt(c)-48) : 0; };
@@ -364,7 +373,7 @@ function computeRoute(){
 }
 
 // ---- From/To search for the route mapper (areas, keys, places) ----
-function tileFromPx(px,py){ const tp = META.dims[String(META.levels[0])][0] / META.grid.cols;
+function tileFromPx(px,py){ const tp = srcTile();
   return { r: Math.floor(py/tp), c: Math.floor(px/tp) }; }
 function buildRouteIndex(){
   routeEntries = []; const seen = {};
@@ -420,12 +429,15 @@ function flyToTile(z,r,c){
 }
 // Click a stair/ladder to jump to where it leads (the landing on the linked floor).
 function portalJump(z, r, c){
-  const Z = META.levels.map(String), zix = Z.indexOf(String(z)), cols = META.grid.cols;
+  const Z = META.levels.map(String), zix = Z.indexOf(String(z));
   const OFF = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
   const tryDir = (needPartner)=>{
     for(const dz of [1,-1]){                          // prefer up, then down
       const nzix = zix+dz; if(nzix<0||nzix>=Z.length) continue;
-      const nz = Z[nzix], w = WALK[nz], ps = portalSet[nz]; if(!w) continue;
+      const nz = Z[nzix];
+      if(colsOf(nz)!==colsOf(z) || rowsOf(nz)!==rowsOf(z)) continue;  // same map (aligned) only
+      const w = WALK[nz], ps = portalSet[nz]; if(!w) continue;
+      const cols = colsOf(nz);
       for(const o of OFF){
         const nr = r+o[0], nc = c+o[1];
         if(nr<0||nc<0||nr>=w.length||nc>=cols) continue;
@@ -506,13 +518,13 @@ viewer.addHandler("open", ()=>{
 viewer.addHandler("update-viewport", scheduleAreaVis);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
 viewer.addHandler("canvas-click", function(e){
-  if(!e.quick || !META.grid) return;
+  if(!e.quick || !META || !META.dims) return;
   const img = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position));
   const tp = tilePx(), c = Math.floor(img.x/tp), r = Math.floor(img.y/tp);
-  if(r<0||c<0||r>=META.grid.rows||c>=META.grid.cols) return;
+  if(r<0||c<0||r>=rowsOf(currentZ)||c>=colsOf(currentZ)) return;
   if(!routeMode){
     // outside route mode: click a stair/ladder to jump to where it leads
-    if(portalSet[currentZ] && portalSet[currentZ].has(r*META.grid.cols + c)) portalJump(currentZ, r, c);
+    if(portalSet[currentZ] && portalSet[currentZ].has(r*colsOf(currentZ) + c)) portalJump(currentZ, r, c);
     return;
   }
   if(!routeStart || (routeStart && routeEnd)){

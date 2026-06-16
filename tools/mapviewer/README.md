@@ -64,8 +64,14 @@ and **POIs** (click or arrow-key + Enter); picking one flies you there and route
 when both ends are set.
 
 Outside route mode, **clicking a staircase or ladder jumps to the floor it leads
-to** (it lands you on the partner stair/landing on the linked z-level). All
-z-levels present in the map are rendered and selectable automatically.
+to** (it lands you on the partner stair/landing on the linked z-level).
+
+**All world z-levels are included.** The world stacks several maps at runtime, so
+the viewer renders them in load order with matching z-numbers: **dun_world →
+z1–4**, **dungeon → z5–6**, **wretch_coast → z7–9** (config in `build.py`'s
+`DEFAULT_MAPS`). Each map can have its own dimensions — grids are per-z — so
+routing/borders/portals work within each map (the maps are separate instances,
+not coordinate-aligned, so a single route won't cross between them).
 
 Nothing is hard-coded to the current map size: `build.py` reads the render
 dimensions and the viewer reads `meta.json`, so a bigger map / different z-count
