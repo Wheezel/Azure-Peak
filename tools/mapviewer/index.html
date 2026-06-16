@@ -101,7 +101,7 @@
   <span class="rdot" style="background:#e74c3c"></span><span class="rlab">To</span>
   <span class="rwrap"><input id="routeto" placeholder="search destination…" autocomplete="off"><div class="rdrop" id="todrop"></div></span>
 </div>
-<div id="hint">drag to scroll · scroll-wheel / pinch to zoom · click a pin or list item to fly there</div>
+<div id="hint">drag to scroll · wheel / pinch to zoom · click stairs to jump floors · click a pin to fly there</div>
 <div id="credit">full sprite render</div>
 
 <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js" crossorigin="anonymous"></script>
@@ -418,6 +418,28 @@ function flyToTile(z,r,c){
     viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 3.2)); };
   if(String(z) !== String(currentZ)){ loadZ(+z); viewer.addOnceHandler("open", go); } else go();
 }
+// Click a stair/ladder to jump to where it leads (the landing on the linked floor).
+function portalJump(z, r, c){
+  const Z = META.levels.map(String), zix = Z.indexOf(String(z)), cols = META.grid.cols;
+  const OFF = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const tryDir = (needPartner)=>{
+    for(const dz of [1,-1]){                          // prefer up, then down
+      const nzix = zix+dz; if(nzix<0||nzix>=Z.length) continue;
+      const nz = Z[nzix], w = WALK[nz], ps = portalSet[nz]; if(!w) continue;
+      for(const o of OFF){
+        const nr = r+o[0], nc = c+o[1];
+        if(nr<0||nc<0||nr>=w.length||nc>=cols) continue;
+        if(w[nr].charCodeAt(nc)-48 <= 0) continue;     // must be walkable
+        if(needPartner && !(ps && ps.has(nr*cols+nc))) continue;  // prefer a partner stair/ladder
+        flyToTile(nz, nr, nc);
+        setHint((dz>0 ? "↑ jumped up to z" : "↓ jumped down to z") + nz + " (where the stairs lead)");
+        return true;
+      }
+    }
+    return false;
+  };
+  return tryDir(true) || tryDir(false);
+}
 function flyTo(p){
   viewer.viewport.panTo(viewer.viewport.imageToViewportCoordinates(p.px, p.py));
   viewer.viewport.zoomTo(Math.max(viewer.viewport.getZoom(), 4));
@@ -484,10 +506,15 @@ viewer.addHandler("open", ()=>{
 viewer.addHandler("update-viewport", scheduleAreaVis);
 viewer.addHandler("open-failed", e=>showErr("Failed to open z"+currentZ+": "+(e.message||"?")));
 viewer.addHandler("canvas-click", function(e){
-  if(!routeMode || !e.quick || !META.grid) return;
+  if(!e.quick || !META.grid) return;
   const img = viewer.viewport.viewportToImageCoordinates(viewer.viewport.pointFromPixel(e.position));
   const tp = tilePx(), c = Math.floor(img.x/tp), r = Math.floor(img.y/tp);
   if(r<0||c<0||r>=META.grid.rows||c>=META.grid.cols) return;
+  if(!routeMode){
+    // outside route mode: click a stair/ladder to jump to where it leads
+    if(portalSet[currentZ] && portalSet[currentZ].has(r*META.grid.cols + c)) portalJump(currentZ, r, c);
+    return;
+  }
   if(!routeStart || (routeStart && routeEnd)){
     routeStart = {z:currentZ, r:r, c:c}; routeEnd = null; routePts = null;
     setHint("Now switch floors if needed, then click the destination.");
