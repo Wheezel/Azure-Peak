@@ -80,6 +80,15 @@
 	is_recipe_node = TRUE
 	prerequisites = list("FLESH_DECOYS")
 
+/datum/chimeric_tech_node/basic_organs
+	name = "Basic Organ Synthesis"
+	description = "Allows culturing basic organs - hearts, lungs, livers, eyes and tongues - from flesh nodes and beast blood."
+	string_id = "BASIC_ORGANS"
+	required_tier = 2
+	cost = 30
+	selection_weight = 5
+	is_recipe_node = TRUE
+
 /datum/chimeric_tech_node/black_rose
 	name = "Black Rose Synthesis"
 	description = "Allows crafting of black roses from corrupted flesh and beast blood. It is believed heartbeasts were in part created by Pestra herself to control the black rot that lingers withing these roses."
@@ -160,6 +169,7 @@
 	selection_weight = 2
 
 // SPECIAL RESEARCH
+/datum/chimeric_tech_node/sanctified_lampterns
 	name = "Sanctified lampterns"
 	description = "Allows fashioning fog repelling lampterns at anvils."
 	string_id = "SANCTIFIED_LAMPTERNS"
