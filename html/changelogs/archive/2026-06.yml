@@ -670,3 +670,112 @@
   - balance: necro legion gets flail skill
   - bugfix: fixed necro legion NOT getting maces skill AT ALL despite getting a pick
       for maces.
+2026-06-17:
+  Ketrai:
+  - bugfix: Removeallspells proc removes all spells again
+  nauticall:
+  - bugfix: Stairs are now properly buildable again.
+  - bugfix: Leaning on walls on RUN intent no longer builds Athletics XP.
+  - bugfix: Morphing elixirs on fencer's cuirasses (for Freifetchers) no longer compromise
+      Freifetcher dexterity.
+2026-06-18:
+  FreeStylaLT:
+  - rscadd: Adds Vocal Chirps.
+  - balance: Trees no longer grow branches at their base.
+  - refactor: Swapped around how the examine block is formatted, putting the headshot
+      & supplementary buttons / info at the bottom.
+  HeroWithYay:
+  - rscadd: A new Vagabond subclass. Abandoned Thrall.
+  KatTheFox:
+  - rscadd: Hunted vice now only makes you a target for gnolls, not assassins, no
+      matter what role you are.
+  - rscadd: A new vice, Targeted, that does exactly what hunted used to, but for assassins
+      only. Both Hunted and Targeted require another vice, and can be taken together
+      if you want the "classic hunted experience".
+  - bugfix: Hard antags can no longer take hunted/targeted. Could you fucking imagine
+      a hunted VL. The poor gnolls.
+  Ketrai:
+  - balance: Made territorial heartbeast attacks respect armor again, but damages
+      armor heavily.
+  Ryan180602:
+  - bugfix: optimise playsound
+  - bugfix: runtimes
+  - rscadd: Admin Sandbox gamemode.
+  - rscadd: Replace storytellers with gamemodes.
+  WeNeedMorePhoron:
+  - rscadd: Adrenaline rush have two mutually exclusive subtypes now. Melee and Ranged.
+      Melee Adr Rush grants +1 Wil and +1 Con, from +1 Wil. Ranged Adr Rush grants
+      +2 SPE. You gain this by deflecting spells.
+  - balance: No more adrenaline rush if you deflect a spell fired by yourself.
+  - rscadd: Reduce rural taxes income from 500 flat to 250 flat. Since Econ 3 added
+      a lot of economic activities, the Crown's passive taxation income has rose which
+      made the game kinda runs itself, so I am increasing the difficulties a bit to
+      make active steward gameplay more necessary. I will tune as needed.
+  - rscadd: Added proper category for arcane reagents selling to ship.
+  borneblood:
+  - bugfix: You can bathe with Skin Armor now. No need to take off your skin to bathe
+      anymore.
+  - bugfix: Summoned Skeletons no longer suffer PTSD.
+  kiwedespars:
+  - rscadd: silver monocle
+  - rscadd: onyxa spectacles
+  - balance: halfsword stab parriable/dodgable
+2026-06-19:
+  Kell-E:
+  - bugfix: Serving Hatches can no longer be bypassed by sneaking.
+  Ketrai:
+  - rscadd: Mushroom
+  Kolibri-B:
+  - rscadd: Added Construct to the list of races that can take the 'Underdweller'
+      origin.
+  OrbisAnima:
+  - bugfix: fixed couple of Interactions still spamming messages!
+  Ryan180602:
+  - bugfix: give nocblade holysee weapon options
+  WeNeedMorePhoron:
+  - bugfix: Cooking on an infernal familiar no longer print out your cooking skills
+      to the entire world. 1
+  - bugfix: Covetous Crown no longer print money infinitely if balance is less than
+      10 draining money from literally nowhere. Also improved some of the texts you
+      get on other failure condition, such as robbing a goat.
+  radarseas:
+  - rscadd: Added a ton of random NPC loadouts.
+  - rscadd: NPCs now use random voicepacks.
+  - rscadd: NPCs now use random voice colors from a 10 choice pick.
+  - rscadd: most NPCs can now alternative between genders randomly.
+  - rscadd: a couple more NPC lines.
+  - rscadd: skeleton NPCs can now utter single-lines in Zizocant (Kill/Fight, they're
+      ferals, sire.), or laugh and rage against the lyving.
+  - balance: changed the weaponry some NPCs spawn with.
+  - balance: Alotheos skeletons can now fient and do specials, the vile doctor can
+      now dodge via dodge expert, they also shuffle around more and should be a proper,
+      worthy miniboss instead of just free loot that's slightly harder to parry.
+  - balance: mad touched now gets bronze Kalopshes instead of steel grade.
+  - balance: more NPCs spawn with armor repair kits.
+  - balance: northman raiders can now use specials but in turn have become slightly
+      more uncommon in quests,
+  - balance: some NPCs spawn with amulets for flavor.
+  - balance: vault psydonite lizards have armored robes to make them slightly harder,
+      they also use unique lines now.
+  - balance: due to technical restraints, reavers have less armor and bomb use chance,
+      instead they play out by more tossblade use and slightly higher int.
+  - balance: orc warlord has been redone slightly with how they play out, instead
+      they have iron banded plate armor + heavy weapon + int, but lose speed and con,
+      making them smart enough to use specials (unless you daze them), 2 tile damage
+      dishers that aren't headlong in the crowd of orcs, suitable as a proper miniboss
+      worthy of fighting.
+  - balance: slightly less northman raiders in the blockade event.
+  - balance: some NPCs now weight their shield based off of their weapon pick.
+  - balance: kalopsh knight now has a gorget since they lost the swift boon that made
+      them hilariously dangerous.
+  - balance: NPCs with duel wielding now recieve the trait to let them actually use
+      their weapons.
+  - balance: downtuned the mad touched treasure hunter's iron to iron/banded iron
+      plate/bracers/gauntlets
+  - bugfix: fixed deserters/highwaymen not correctly using different hair.
+  - bugfix: fixed bodies of NPCs being weird when they're trying to use the female
+      bodytype.
+  - rscadd: Added the (2) new glasses to conjure specs spell. Trust the Vision.
+  yyzsong:
+  - spellcheck: The Undivided "Lesser Anastasis" miracle no longer mentions requiring
+      gold ore in its description
