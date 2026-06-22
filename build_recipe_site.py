@@ -595,6 +595,20 @@ def add_stew_recipe(typ, v):
         'amount': '1',
     })
 
+# Inheritable food_recipe vars (a child recipe inherits these from its
+# abstract parent if it does not set them itself).
+FOOD_INHERIT = ('base_item', 'cook_method', 'needs_cooking', 'result_amount')
+
+def resolve_recipe_var(typ, field, food_vars):
+    p = typ
+    while p.count('/') > 2:
+        p = p.rsplit('/', 1)[0]
+        if p in food_vars and field in food_vars[p]:
+            return food_vars[p][field]
+        if p == '/datum/food_recipe':
+            break
+    return None
+
 def parse_recipes():
     targets = []
     for p in ROOT.rglob('*.dm'):
@@ -603,6 +617,7 @@ def parse_recipes():
         s = str(p)
         if any(x in s for x in ['recipe', 'cooking', 'brewing', 'stew']):
             targets.append(p)
+    food_vars = {}  # every /datum/food_recipe/* (incl. abstract parents)
     for p in targets:
         try:
             content = p.read_text(encoding='utf-8', errors='ignore')
@@ -611,58 +626,88 @@ def parse_recipes():
         for m in re.finditer(r'^(/datum/[a-zA-Z0-9_/]+)\s*$', content, re.MULTILINE):
             typ = m.group(1)
             block = grab_block(content, m.start())
-            # skip the very base/abstract defs
             v = parse_assignments(block)
-            if 'abstract_type' in v and typ.count('/') <= 3:
-                pass
             key = typ
+            if typ.startswith('/datum/food_recipe/'):
+                # remember vars for inheritance; emit in a later pass
+                if typ not in food_vars:
+                    food_vars[typ] = v
+                continue
             if key in SEEN:
                 continue
-            if re.match(r'/datum/food_recipe/.+', typ) and 'name' in v or re.match(r'/datum/food_recipe/[a-z]', typ):
-                if 'base_item' in v or 'result_type' in v:
-                    SEEN.add(key); add_food_recipe(typ, v)
-            elif typ.startswith('/datum/brewing_recipe/') and ('output_bottle_type' in v or 'reagent_to_brew' in v):
+            if typ.startswith('/datum/brewing_recipe/') and ('output_bottle_type' in v or 'reagent_to_brew' in v):
                 SEEN.add(key); add_brewing_recipe(typ, v)
             elif typ.startswith('/datum/crafting_recipe/roguetown/cooking/') and 'result' in v:
                 SEEN.add(key); add_crafting_cooking(typ, v)
             elif typ.startswith('/datum/stew_recipe/') and ('inputs' in v or 'output' in v):
                 SEEN.add(key); add_stew_recipe(typ, v)
 
+    # Second pass: emit concrete food recipes, resolving inherited vars.
+    for typ, v in food_vars.items():
+        if 'abstract_type' in v:           # abstract parent, not a real recipe
+            continue
+        if 'result_type' not in v:         # a listable dish always yields something
+            continue
+        merged = dict(v)
+        for fld in FOOD_INHERIT:
+            if fld not in merged:
+                val = resolve_recipe_var(typ, fld, food_vars)
+                if val is not None:
+                    merged[fld] = val
+        if typ in SEEN:
+            continue
+        SEEN.add(typ); add_food_recipe(typ, merged)
+
 # ---------------------------------------------------------------------------
 # 4. SITE GENERATION
 # ---------------------------------------------------------------------------
 
-def _ing(name):
+def _esc(s):
+    return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+# item_path -> recipe id of the recipe that produces it (set in build_producers)
+PRODUCERS = {}
+
+def _ing(ref, self_id=None):
+    """Render an ingredient. If it is itself produced by a recipe, make it a
+    clickable link carrying that recipe's id (for the hover tooltip)."""
+    if isinstance(ref, str):
+        return f'<span class="ing">{_esc(ref)}</span>'
+    name = _esc(ref.get('name', ''))
+    pid = PRODUCERS.get(ref.get('path'))
+    if pid is not None and pid != self_id:
+        return f'<span class="ing link" data-make="{pid}">{name}</span>'
     return f'<span class="ing">{name}</span>'
 
 def build_instruction(r):
     """Natural-language instruction HTML, screenshot-style."""
     cat = r['category']
+    sid = r.get('id')
     if cat == 'Cooking':
         items, tools, anyofs, sharp = [], [], [], False
         for s in r.get('steps', []):
             if s['kind'] == 'sharp':
                 sharp = True
             elif s['kind'] == 'anyof':
-                anyofs.append(" or ".join(_ing(o['name']) for o in s['options']))
+                anyofs.append(" or ".join(_ing(o, sid) for o in s['options']))
             else:
                 x = s['ref']
                 if x.get('note') == 'tool (not consumed)':
-                    tools.append(_ing(x['name']))
+                    tools.append(_ing(x, sid))
                 elif x.get('note') and 'units' in x['note']:
-                    items.append(f"{x['note'].replace(' units','')}dr of {_ing(x['name'])}")
+                    items.append(f"{x['note'].replace(' units','')}dr of {_ing(x, sid)}")
                 else:
-                    items.append("1 " + _ing(x['name']))
+                    items.append("1 " + _ing(x, sid))
         base_txt = ""
         if r.get('bases'):
-            bnames = [_ing(b['name']) for b in r['bases']]
+            bnames = [_ing(b, sid) for b in r['bases']]
             base_txt = (" to " if items else " ") + (" or ".join(bnames) if len(bnames) > 1 else bnames[0])
         sent = ""
         addbits = items + anyofs
         if addbits:
             sent = "Add " + ", ".join(addbits) + base_txt
         elif r.get('bases'):
-            sent = "Start with " + (" or ".join(_ing(b['name']) for b in r['bases']))
+            sent = "Start with " + (" or ".join(_ing(b, sid) for b in r['bases']))
         if tools:
             sent += " using " + ", ".join(tools)
         if sharp:
@@ -674,10 +719,10 @@ def build_instruction(r):
     if cat == 'Brewing':
         ings = []
         for i in r.get('ingredients_flat', []):
-            note = i.get('note')
-            label = (note + " " if note else "") + _ing(i['name'])
             if i['name'].lower() == 'water':
                 continue
+            note = i.get('note')
+            label = (note + " " if note else "") + _ing(i, sid)
             ings.append(label.strip())
         sent = "Ferment " + ", ".join(ings) + " with water in a barrel." if ings else "Ferment in a barrel."
         extra = []
@@ -689,7 +734,7 @@ def build_instruction(r):
             sent += " (" + ", ".join(extra) + ")"
         return sent
     if cat == 'Stew':
-        opts = [_ing(i['name']) for i in r.get('ingredients_flat', [])]
+        opts = [_ing(i, sid) for i in r.get('ingredients_flat', [])]
         if len(opts) > 6:
             shown = ", ".join(opts[:6]) + f", or {len(opts)-6} more"
         else:
@@ -699,10 +744,20 @@ def build_instruction(r):
     ings = []
     for i in r.get('ingredients_flat', []):
         note = i.get('note')
-        ings.append((note + " " if note else "") + _ing(i['name']))
+        ings.append((note + " " if note else "") + _ing(i, sid))
     return "Combine " + ", ".join(ings) + "." if ings else "Prepare at a table."
 
+def build_producers():
+    for r in RECIPES:
+        res = r.get('result')
+        if res and res.get('path'):
+            PRODUCERS.setdefault(res['path'], r['id'])
+
 def enrich():
+    # assign stable ids, map item -> producing recipe, then build text
+    for i, r in enumerate(RECIPES):
+        r['id'] = i
+    build_producers()
     for r in RECIPES:
         res = r.get('result')
         if res and res.get('path'):
@@ -801,6 +856,17 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
   .title.lavish{color:var(--lavish)} .title.imp{color:var(--imp)} .title.none{color:var(--text)}
   .instr{line-height:1.5}
   .ing{color:var(--ing)}
+  .ing.link{cursor:pointer;border-bottom:1px dotted currentColor}
+  .ing.link:hover{color:#9fd0ff}
+  #tip{position:fixed;z-index:50;max-width:360px;background:#0e131c;border:1px solid var(--gold);
+       border-radius:8px;padding:10px 12px;box-shadow:0 8px 26px rgba(0,0,0,.6);font-size:.92em;
+       pointer-events:none;display:none}
+  #tip .tt-h{color:var(--gold2);font-style:italic;font-weight:bold;margin-bottom:4px}
+  #tip .tt-l{color:var(--muted);font-size:.8em;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+  #tip .tt-b{color:var(--text);line-height:1.45}
+  #tip .tt-e{margin-top:6px;color:var(--text)}
+  tr.flash{animation:fl 1.7s ease}
+  @keyframes fl{0%,100%{background:transparent}18%{background:#d9b35c40}}
   .meta{color:var(--muted);font-size:.85em;margin-top:3px}
   .eff .s{color:var(--stat);font-weight:bold}
   .eff .dash{color:var(--muted)}
@@ -848,7 +914,7 @@ function rowHTML(r){
   const fare = r.fare||'none';
   let meta='';
   if(r.brew_time) meta = `<div class="meta">Brew time ${esc(r.brew_time)}${r.amount?` &middot; yields ${esc(r.amount)}`:''}</div>`;
-  return `<tr class="r" data-cat="${r.category}">
+  return `<tr class="r" data-cat="${r.category}" data-id="${r.id}">
     <td class="name"><div class="nm">${img}<span class="title ${fare}">${esc(r.name)}</span></div></td>
     <td><div class="instr">${r.instr||''}</div>${meta}</td>
     <td class="eff">${effHTML(r.effect)}</td>
@@ -883,6 +949,37 @@ function buildCats(){
   for(const ct of CATS) c.appendChild(mk(ct.name,ct.count));
 }
 document.getElementById('q').addEventListener('input',e=>{curQ=e.target.value.toLowerCase().trim();render();});
+
+// ---- clickable predecessor ingredients + hover tooltip --------------------
+const BYID={}; RECIPES.forEach(r=>BYID[r.id]=r);
+const out=document.getElementById('out');
+const tip=document.createElement('div'); tip.id='tip'; document.body.appendChild(tip);
+function showTip(el){
+  const r=BYID[+el.dataset.make]; if(!r) return;
+  tip.innerHTML=`<div class="tt-l">How to make</div><div class="tt-h">${esc(r.name)}</div>`+
+                `<div class="tt-b">${r.instr||''}</div>`+
+                (r.effect?`<div class="tt-e">${effHTML(r.effect)}</div>`:'');
+  tip.style.display='block';
+}
+function moveTip(e){const pad=14;let x=e.clientX+pad,y=e.clientY+pad;
+  const w=tip.offsetWidth,h=tip.offsetHeight;
+  if(x+w>innerWidth)x=e.clientX-w-pad; if(y+h>innerHeight)y=e.clientY-h-pad;
+  tip.style.left=Math.max(4,x)+'px'; tip.style.top=Math.max(4,y)+'px';}
+out.addEventListener('mouseover',e=>{const el=e.target.closest('.ing.link'); if(el){showTip(el);moveTip(e);}});
+out.addEventListener('mousemove',e=>{if(tip.style.display==='block')moveTip(e);});
+out.addEventListener('mouseout',e=>{if(e.target.closest('.ing.link'))tip.style.display='none';});
+out.addEventListener('click',e=>{
+  const el=e.target.closest('.ing.link'); if(!el)return;
+  const id=+el.dataset.make; if(!BYID[id])return;
+  tip.style.display='none'; curCat='All'; curQ='';
+  document.getElementById('q').value='';
+  [...document.getElementById('cats').children].forEach(x=>x.classList.toggle('on',x.dataset.cat==='All'));
+  render();
+  const row=document.querySelector(`tr[data-id="${id}"]`);
+  if(row){row.scrollIntoView({behavior:'smooth',block:'center'});
+          row.classList.add('flash'); setTimeout(()=>row.classList.remove('flash'),1700);}
+});
+
 buildCats();render();
 </script>
 </body>
