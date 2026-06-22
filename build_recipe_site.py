@@ -837,11 +837,29 @@ def build_producers():
         if res and res.get('path'):
             PRODUCERS.setdefault(res['path'], r['id'])
 
+def _referenced_paths(rec):
+    out = []
+    for b in rec.get('bases', []):
+        out.append(b.get('path'))
+    for s in rec.get('steps', []):
+        if s.get('ref'):
+            out.append(s['ref'].get('path'))
+        for o in s.get('options', []):
+            out.append(o.get('path'))
+    for i in rec.get('ingredients_flat', []):
+        out.append(i.get('path'))
+    return [p for p in out if p]
+
 def enrich():
     # assign stable ids, map item -> producing recipe, then build text
     for i, r in enumerate(RECIPES):
         r['id'] = i
     build_producers()
+    # reverse direction: item path -> recipe ids that consume it
+    consumers = defaultdict(list)
+    for r in RECIPES:
+        for p in set(_referenced_paths(r)):
+            consumers[p].append(r['id'])
     for r in RECIPES:
         res = r.get('result')
         if res and res.get('path'):
@@ -851,6 +869,16 @@ def enrich():
             r['fare'] = None
             r['effect'] = None
         r['instr'] = build_instruction(r)
+        # forward links: what this result is used to make
+        used = []
+        seen_u = set()
+        if res and res.get('path'):
+            for cid in consumers.get(res['path'], []):
+                if cid == r['id'] or cid in seen_u:
+                    continue
+                seen_u.add(cid)
+                used.append({'id': cid, 'name': RECIPES[cid]['name']})
+        r['used_in'] = used
 
 def main():
     print('[*] Building type index (3596 dm files)...')
@@ -947,8 +975,12 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
     border-radius:8px;padding:1px 7px;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle;font-style:normal}
   .instr{line-height:1.5}
   .ing{color:var(--ing)}
-  .ing.link{cursor:pointer;border-bottom:1px dotted currentColor}
+  .link{cursor:pointer}
+  .ing.link{border-bottom:1px dotted currentColor}
   .ing.link:hover{color:#9fd0ff}
+  .usedin{margin-top:6px;font-size:.83em;color:var(--muted)}
+  .usedin .uses{color:var(--gold);border-bottom:1px dotted currentColor}
+  .usedin .uses:hover{color:var(--gold2)}
   #tip{position:fixed;z-index:50;max-width:360px;background:#0e131c;border:1px solid var(--gold);
        border-radius:8px;padding:10px 12px;box-shadow:0 8px 26px rgba(0,0,0,.6);font-size:.92em;
        pointer-events:none;display:none}
@@ -956,8 +988,10 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
   #tip .tt-l{color:var(--muted);font-size:.8em;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
   #tip .tt-b{color:var(--text);line-height:1.45}
   #tip .tt-e{margin-top:6px;color:var(--text)}
-  tr.flash{animation:fl 1.7s ease}
-  @keyframes fl{0%,100%{background:transparent}18%{background:#d9b35c40}}
+  tr.flash{animation:fl 2s ease}
+  tr.flash td{box-shadow:inset 0 0 0 9999px #d9b35c00;animation:fle 2s ease}
+  @keyframes fl{0%{background:#d9b35c66}100%{background:transparent}}
+  @keyframes fle{0%{box-shadow:inset 4px 0 0 0 var(--gold2)}100%{box-shadow:inset 4px 0 0 0 transparent}}
   .meta{color:var(--muted);font-size:.85em;margin-top:3px}
   .eff .s{color:var(--stat);font-weight:bold}
   .eff .dash{color:var(--muted)}
@@ -1006,9 +1040,16 @@ function rowHTML(r){
   const fare = r.fare||'none';
   let meta='';
   if(r.brew_time) meta = `<div class="meta">Brew time ${esc(r.brew_time)}${r.amount?` &middot; yields ${esc(r.amount)}`:''}</div>`;
+  let used='';
+  if(r.used_in && r.used_in.length){
+    const cap=8; const list=r.used_in.slice(0,cap)
+      .map(u=>`<span class="link uses" data-make="${u.id}">${esc(u.name)}</span>`).join(', ');
+    const more=r.used_in.length>cap?`, +${r.used_in.length-cap} more`:'';
+    used=`<div class="usedin">Used in: ${list}${more}</div>`;
+  }
   return `<tr class="r" data-cat="${r.category}" data-id="${r.id}">
     <td class="name"><div class="nm">${img}<span class="title ${fare}">${esc(r.name)}</span>${r.intermediate?'<span class="interm">prep step</span>':''}</div></td>
-    <td><div class="instr">${r.instr||''}</div>${meta}</td>
+    <td><div class="instr">${r.instr||''}</div>${meta}${used}</td>
     <td class="eff">${effHTML(r.effect)}</td>
   </tr>`;
 }
@@ -1057,11 +1098,11 @@ function moveTip(e){const pad=14;let x=e.clientX+pad,y=e.clientY+pad;
   const w=tip.offsetWidth,h=tip.offsetHeight;
   if(x+w>innerWidth)x=e.clientX-w-pad; if(y+h>innerHeight)y=e.clientY-h-pad;
   tip.style.left=Math.max(4,x)+'px'; tip.style.top=Math.max(4,y)+'px';}
-out.addEventListener('mouseover',e=>{const el=e.target.closest('.ing.link'); if(el){showTip(el);moveTip(e);}});
+out.addEventListener('mouseover',e=>{const el=e.target.closest('.link[data-make]'); if(el){showTip(el);moveTip(e);}});
 out.addEventListener('mousemove',e=>{if(tip.style.display==='block')moveTip(e);});
-out.addEventListener('mouseout',e=>{if(e.target.closest('.ing.link'))tip.style.display='none';});
+out.addEventListener('mouseout',e=>{if(e.target.closest('.link[data-make]'))tip.style.display='none';});
 out.addEventListener('click',e=>{
-  const el=e.target.closest('.ing.link'); if(!el)return;
+  const el=e.target.closest('.link[data-make]'); if(!el)return;
   const id=+el.dataset.make; if(!BYID[id])return;
   tip.style.display='none'; curCat='All'; curQ='';
   document.getElementById('q').value='';
