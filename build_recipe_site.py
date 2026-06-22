@@ -922,6 +922,7 @@ def write_site():
     (DOCS / 'index.html').write_text(PAGE_TEMPLATE
         .replace('/*DATA*/', data_json)
         .replace('/*TOTAL*/', str(len(RECIPES)))
+        .replace('/*PRODUCERS*/', json.dumps(PRODUCERS))
         .replace('/*CATS*/', json.dumps([{'name': c, 'count': cat_counts[c]} for c in cats])),
         encoding='utf-8')
 
@@ -996,6 +997,44 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
   .eff .s{color:var(--stat);font-weight:bold}
   .eff .dash{color:var(--muted)}
   .empty{text-align:center;color:var(--muted);padding:50px}
+  tr.r{cursor:pointer}
+  /* ---- full-recipe modal ---- */
+  #overlay{position:fixed;inset:0;background:rgba(0,0,0,.66);display:none;z-index:60;
+    align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+  #modal{background:linear-gradient(180deg,#222c3d,#1b2230);border:1px solid var(--gold);
+    border-radius:12px;max-width:820px;width:100%;padding:22px 26px 30px;position:relative;
+    box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #mclose{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--muted);
+    font-size:26px;cursor:pointer;line-height:1}
+  #mclose:hover{color:var(--gold2)}
+  #mback{background:#2c3647;border:1px solid var(--line);color:var(--text);border-radius:16px;
+    padding:4px 12px;cursor:pointer;font-family:inherit;font-size:13px;margin-bottom:10px;display:none}
+  #mback:hover{border-color:var(--gold);color:var(--gold2)}
+  .mhead{display:flex;align-items:center;gap:14px;border-bottom:2px solid var(--line);padding-bottom:14px;margin-bottom:6px}
+  .mhead img{width:56px;height:56px;background:#0e131c;border-radius:8px;padding:4px}
+  .mhead h2{margin:0;font-size:1.7em;font-style:italic}
+  .mhead h2.fine{color:var(--fine)} .mhead h2.poor{color:var(--poor)} .mhead h2.neutral{color:var(--neutral)}
+  .mhead h2.lavish{color:var(--lavish)} .mhead h2.imp{color:var(--imp)}
+  .meff{margin-top:4px;color:var(--text)}
+  .mlabel{color:var(--gold);font-size:.8em;text-transform:uppercase;letter-spacing:.7px;font-weight:bold;margin:18px 0 8px}
+  .rawrow{display:flex;flex-wrap:wrap;gap:8px}
+  .rawchip{display:inline-flex;align-items:center;gap:6px;background:#0e131c;border:1px solid var(--line);
+    border-radius:18px;padding:4px 12px 4px 5px;font-size:.9em}
+  .rawchip img{width:24px;height:24px}
+  ol.method{margin:0;padding-left:0;counter-reset:ms;list-style:none}
+  ol.method li{position:relative;padding:10px 0 10px 44px;border-bottom:1px solid var(--line)}
+  ol.method li:before{counter-increment:ms;content:counter(ms);position:absolute;left:0;top:10px;
+    width:28px;height:28px;border-radius:50%;background:#2c3647;border:1px solid var(--line);
+    color:var(--gold2);display:flex;align-items:center;justify-content:center;font-size:.85em}
+  ol.method li.final:before{background:var(--gold);color:#1b2230;border-color:var(--gold2);font-weight:bold}
+  ol.method li.final{background:#d9b35c12}
+  .mline{display:flex;align-items:center;gap:9px;font-weight:bold}
+  .mline img{width:30px;height:30px;background:#0e131c;border-radius:5px;padding:2px}
+  .mname{color:var(--gold2);font-style:italic}
+  .finflag{font-size:.66em;background:var(--gold);color:#1b2230;border-radius:8px;padding:1px 7px;
+    text-transform:uppercase;letter-spacing:.5px;font-style:normal}
+  .minstr{margin:5px 0 0 39px;color:var(--text);line-height:1.5}
+  .modal-hint{color:var(--muted);font-size:.82em;margin-top:2px}
   footer{text-align:center;color:#55606f;padding:30px;font-size:.85em}
   @media(max-width:760px){td.eff,td.name{width:auto}.controls{position:static}}
 </style>
@@ -1013,11 +1052,17 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
   <div class="count" id="count"></div>
   <div id="out"></div>
 </div>
-<footer>Generated from Azure-Peak source &bull; <span id="t"></span> recipes &bull; sprites &amp; effects extracted from in-game data</footer>
+<div id="overlay"><div id="modal">
+  <button id="mclose" title="Close">&times;</button>
+  <button id="mback">&lsaquo; Back</button>
+  <div id="mbody"></div>
+</div></div>
+<footer>Generated from Azure-Peak source &bull; <span id="t"></span> recipes &bull; click any recipe for the full start-to-finish guide</footer>
 <script>
 const RECIPES = /*DATA*/;
 const CATS = /*CATS*/;
 const TOTAL = /*TOTAL*/;
+const PRODUCERS = /*PRODUCERS*/;
 const SUBTITLES = {
   "Cooking":"Combine a base item with ingredients at a table, then cook where noted.",
   "Preparation":"Mill, slice or roast a raw item into a base ingredient used by other recipes.",
@@ -1029,6 +1074,9 @@ document.getElementById('t').textContent = TOTAL;
 let curCat='All', curQ='';
 
 function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function imgTag(sprite,name){ return sprite
+  ? `<img src="${sprite}" alt="" title="${esc(name)}" onerror="this.style.visibility='hidden'">`
+  : `<span class="ph" title="${esc(name)}">&#9634;</span>`; }
 function effHTML(e){
   if(!e) return '<span class="dash">&mdash;</span>';
   // color +N STAT tokens
@@ -1101,17 +1149,89 @@ function moveTip(e){const pad=14;let x=e.clientX+pad,y=e.clientY+pad;
 out.addEventListener('mouseover',e=>{const el=e.target.closest('.link[data-make]'); if(el){showTip(el);moveTip(e);}});
 out.addEventListener('mousemove',e=>{if(tip.style.display==='block')moveTip(e);});
 out.addEventListener('mouseout',e=>{if(e.target.closest('.link[data-make]'))tip.style.display='none';});
+// Click a link -> open that item's recipe; click a row -> open that recipe.
 out.addEventListener('click',e=>{
-  const el=e.target.closest('.link[data-make]'); if(!el)return;
-  const id=+el.dataset.make; if(!BYID[id])return;
-  tip.style.display='none'; curCat='All'; curQ='';
-  document.getElementById('q').value='';
-  [...document.getElementById('cats').children].forEach(x=>x.classList.toggle('on',x.dataset.cat==='All'));
-  render();
-  const row=document.querySelector(`tr[data-id="${id}"]`);
-  if(row){row.scrollIntoView({behavior:'smooth',block:'center'});
-          row.classList.add('flash'); setTimeout(()=>row.classList.remove('flash'),1700);}
+  tip.style.display='none';
+  const link=e.target.closest('.link[data-make]');
+  if(link){ openRecipe(+link.dataset.make); return; }
+  const row=e.target.closest('tr[data-id]');
+  if(row){ openRecipe(+row.dataset.id); }
 });
+
+// ---- full start-to-finish recipe modal ------------------------------------
+const overlay=document.getElementById('overlay');
+const mbody=document.getElementById('mbody');
+const mback=document.getElementById('mback');
+const history=[];
+
+function inputsOf(r){
+  const out=[];
+  (r.bases||[]).forEach(b=>out.push(b));
+  (r.steps||[]).forEach(s=>{ if(s.kind==='item'&&s.ref) out.push(s.ref); });
+  if(!r.any_of)(r.ingredients_flat||[]).forEach(i=>out.push(i));
+  return out;
+}
+// Post-order walk: prerequisites first, the dish itself last. Dedup + cycle/depth guard.
+function expandTree(rootId){
+  const order=[], seen=new Set(), raw=new Map();
+  (function visit(id,d){
+    if(d>14||seen.has(id))return; seen.add(id);
+    inputsOf(BYID[id]).forEach(inp=>{
+      const pid=PRODUCERS[inp.path];
+      if(pid!=null && pid!==id){ if(!seen.has(pid)) visit(pid,d+1); }
+      else if(inp.path){ raw.set(inp.path, inp); }
+    });
+    order.push(id);
+  })(rootId,0);
+  return {order, raw:[...raw.values()]};
+}
+function recipeModalHTML(id){
+  const r=BYID[id]; const {order,raw}=expandTree(id);
+  const rs=r.result||{};
+  let h=`<div class="mhead">${imgTag(rs.sprite,r.name)}<div>`+
+        `<h2 class="${r.fare||''}">${esc(r.name)}</h2>`+
+        (r.effect?`<div class="meff">${effHTML(r.effect)}</div>`:'')+
+        `<div class="modal-hint">${order.length>1?order.length+' steps from raw ingredients':'single step'} &middot; click any underlined item to open its recipe</div>`+
+        `</div></div>`;
+  const tools=raw.filter(x=>x.note==='tool (not consumed)');
+  const ings=raw.filter(x=>x.note!=='tool (not consumed)');
+  const chip=x=>`<span class="rawchip">${imgTag(x.sprite,x.name)}${esc(x.name)}</span>`;
+  if(ings.length){
+    h+=`<div class="mlabel">Raw ingredients you'll need</div><div class="rawrow">`+
+       ings.map(chip).join('')+`</div>`;
+  }
+  if(tools.length){
+    h+=`<div class="mlabel">Tools</div><div class="rawrow">`+tools.map(chip).join('')+`</div>`;
+  }
+  h+=`<div class="mlabel">Method — start to finish</div><ol class="method">`;
+  order.forEach(sid=>{ const sr=BYID[sid]; const fin=sid===id; const sres=sr.result||{};
+    h+=`<li class="${fin?'final':''}"><div class="mline">${imgTag(sres.sprite,sr.name)}`+
+       `<span class="mname">${esc(sr.name)}</span>${fin?'<span class="finflag">finish</span>':''}`+
+       `${sr.effect?` <span class="eff" style="margin-left:6px">${effHTML(sr.effect)}</span>`:''}</div>`+
+       `<div class="minstr">${sr.instr||''}</div></li>`;
+  });
+  h+=`</ol>`;
+  return h;
+}
+function openRecipe(id, push=true){
+  if(!BYID[id])return;
+  if(push) history.push(id);
+  mbody.innerHTML=recipeModalHTML(id);
+  mbody.scrollTop=0;
+  mback.style.display=history.length>1?'inline-block':'none';
+  overlay.style.display='flex';
+  document.body.style.overflow='hidden';
+}
+function closeModal(){ overlay.style.display='none'; history.length=0; document.body.style.overflow=''; }
+document.getElementById('mclose').onclick=closeModal;
+overlay.addEventListener('click',e=>{ if(e.target===overlay) closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+mback.onclick=()=>{ history.pop(); const prev=history[history.length-1];
+  if(prev!=null){ mbody.innerHTML=recipeModalHTML(prev); mbody.scrollTop=0;
+    mback.style.display=history.length>1?'inline-block':'none'; } };
+// drill down inside the modal
+mbody.addEventListener('click',e=>{ const el=e.target.closest('.link[data-make]');
+  if(el){ e.stopPropagation(); openRecipe(+el.dataset.make); } });
 
 buildCats();render();
 </script>
