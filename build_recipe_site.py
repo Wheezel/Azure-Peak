@@ -31,7 +31,10 @@ DEF_RE = re.compile(r'^(/(?:obj|datum|turf|mob)/[a-zA-Z0-9_/]+)\s*$')
 VAR_RE = re.compile(r'^\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+?)\s*$')
 
 WANTED_VARS = {'name', 'icon', 'icon_state', 'desc',
-               'faretype', 'eat_effect', 'extra_eat_effect'}
+               'faretype', 'eat_effect', 'extra_eat_effect',
+               # item-transform producers (mill / slice / cook)
+               'mill_result', 'slice_path', 'slices_num',
+               'cooked_type', 'fried_type', 'deep_fried_type', 'boiled_type'}
 
 def strip_comment(v: str) -> str:
     # remove trailing // comment (naively, but values rarely contain //)
@@ -467,8 +470,9 @@ def fmt_qty(qty):
 
 def add_food_recipe(typ, v):
     name = unquote(v.get('name', '')) or nice_name(typ)
-    if v.get('hidden', '').strip() == 'TRUE':
-        return  # intermediate; skip from listing
+    # Hidden recipes are intermediate prep steps (e.g. butterdough). Keep them
+    # so their output is listed, traceable and linkable — just mark them.
+    intermediate = v.get('hidden', '').strip() == 'TRUE'
     base = v.get('base_item')
     bases = []
     if base:
@@ -514,7 +518,7 @@ def add_food_recipe(typ, v):
     RECIPES.append({
         'name': name, 'category': 'Cooking', 'bases': bases,
         'steps': steps, 'cook': cook, 'result': res, 'amount': amt,
-        'desc': '',
+        'desc': '', 'intermediate': intermediate,
     })
 
 def add_brewing_recipe(typ, v):
@@ -658,6 +662,79 @@ def parse_recipes():
             continue
         SEEN.add(typ); add_food_recipe(typ, merged)
 
+# ---- "Preparation" recipes: mill / slice / roast item transforms ----------
+# Many base ingredients (flour, butter slices, roasted beans, toast) are not
+# made by a recipe datum but by transforming a raw item. We surface one for
+# every makeable ingredient that's referenced anywhere, recursing until the
+# chain bottoms out at a growable/importable item with no producer.
+TRANSFORMS = [
+    ('mill_result', 'Mill'),
+    ('slice_path', 'Cut'),
+    ('boiled_type', 'Boil'),
+    ('deep_fried_type', 'Deep-fry'),
+    ('fried_type', 'Fry'),
+    ('cooked_type', 'Bake'),
+]
+REVERSE = {}  # result_path -> (verb, source_path, slices_num|None)
+
+def build_reverse_index():
+    for path, info in TYPES.items():
+        if not path.startswith('/obj/item/reagent_containers'):
+            continue
+        for var, verb in TRANSFORMS:
+            tgt = info.get(var)
+            if not tgt or not tgt.startswith('/'):
+                continue
+            tgt = tgt.strip()
+            if tgt == path or tgt in REVERSE:
+                continue
+            sl = info.get('slices_num') if var == 'slice_path' else None
+            REVERSE[tgt] = (verb, path, sl)
+
+def _collect_referenced():
+    refs = set()
+    def add(r):
+        if r and r.get('path'):
+            refs.add(r['path'])
+    for rec in RECIPES:
+        for b in rec.get('bases', []):
+            add(b)
+        for s in rec.get('steps', []):
+            if s.get('ref'):
+                add(s['ref'])
+            for o in s.get('options', []):
+                add(o)
+        for i in rec.get('ingredients_flat', []):
+            add(i)
+    return refs
+
+def add_preparation_recipes():
+    from collections import deque
+    build_reverse_index()
+    produced = {rec['result']['path'] for rec in RECIPES
+                if rec.get('result') and rec['result'].get('path')}
+    queue = deque(p for p in _collect_referenced() if p not in produced)
+    done = set()
+    while queue:
+        p = queue.popleft()
+        if p in done or p in produced or p.startswith('/datum/reagent'):
+            continue
+        done.add(p)
+        rev = REVERSE.get(p)
+        if not rev:
+            continue  # raw growable / importable item — chain ends here
+        verb, src, sl = rev
+        slc = sl.strip() if (sl and re.fullmatch(r'\d+', str(sl).strip())) else None
+        res = ref(p)
+        RECIPES.append({
+            'name': res['name'], 'category': 'Preparation',
+            'bases': [ref(src)], 'steps': [], 'cook': None,
+            'result': res, 'amount': '1', 'desc': '',
+            'prep_verb': verb, 'slices': slc, 'intermediate': False,
+        })
+        produced.add(p)
+        queue.append(src)  # recurse so the source is itself traceable
+
 # ---------------------------------------------------------------------------
 # 4. SITE GENERATION
 # ---------------------------------------------------------------------------
@@ -683,6 +760,13 @@ def build_instruction(r):
     """Natural-language instruction HTML, screenshot-style."""
     cat = r['category']
     sid = r.get('id')
+    if cat == 'Preparation':
+        base = r['bases'][0] if r.get('bases') else None
+        bl = _ing(base, sid) if base else 'a raw item'
+        verb = r.get('prep_verb', 'Prepare')
+        if verb == 'Cut' and r.get('slices'):
+            return f"Cut {bl} (yields {r['slices']} per item)."
+        return f"{verb} {bl}."
     if cat == 'Cooking':
         items, tools, anyofs, sharp = [], [], [], False
         for s in r.get('steps', []):
@@ -778,8 +862,13 @@ def main():
     SPRITES.mkdir(parents=True, exist_ok=True)
     print('[*] Parsing recipes...')
     parse_recipes()
+    n_direct = len(RECIPES)
+    print(f'    parsed {n_direct} direct recipes')
+    print('[*] Tracing makeable base ingredients (mill/slice/roast)...')
+    add_preparation_recipes()
+    print(f'    added {len(RECIPES) - n_direct} preparation recipes')
     enrich()
-    print(f'    parsed {len(RECIPES)} recipes')
+    print(f'    total {len(RECIPES)} recipes')
     by = defaultdict(int)
     for r in RECIPES:
         by[r['category']] += 1
@@ -794,7 +883,7 @@ def main():
     print('[+] wrote docs/index.html')
 
 
-CAT_ORDER = ['Cooking', 'Prepared (slapcraft)', 'Stew', 'Brewing']
+CAT_ORDER = ['Cooking', 'Preparation', 'Prepared (slapcraft)', 'Stew', 'Brewing']
 
 def write_site():
     order = {c: i for i, c in enumerate(CAT_ORDER)}
@@ -854,6 +943,8 @@ PAGE_TEMPLATE = r"""<!DOCTYPE html>
   .title{font-style:italic;font-size:1.05em;line-height:1.2}
   .title.fine{color:var(--fine)} .title.poor{color:var(--poor)} .title.neutral{color:var(--neutral)}
   .title.lavish{color:var(--lavish)} .title.imp{color:var(--imp)} .title.none{color:var(--text)}
+  .interm{display:inline-block;margin-left:7px;font-size:.66em;color:var(--muted);border:1px solid var(--line);
+    border-radius:8px;padding:1px 7px;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle;font-style:normal}
   .instr{line-height:1.5}
   .ing{color:var(--ing)}
   .ing.link{cursor:pointer;border-bottom:1px dotted currentColor}
@@ -895,6 +986,7 @@ const CATS = /*CATS*/;
 const TOTAL = /*TOTAL*/;
 const SUBTITLES = {
   "Cooking":"Combine a base item with ingredients at a table, then cook where noted.",
+  "Preparation":"Mill, slice or roast a raw item into a base ingredient used by other recipes.",
   "Prepared (slapcraft)":"Combine items by hand or at a table — no cooking station required.",
   "Stew":"Boil a pot of water, then drop in any one listed ingredient.",
   "Brewing":"Ferment crops with water in a barrel; many improve with age."
@@ -915,7 +1007,7 @@ function rowHTML(r){
   let meta='';
   if(r.brew_time) meta = `<div class="meta">Brew time ${esc(r.brew_time)}${r.amount?` &middot; yields ${esc(r.amount)}`:''}</div>`;
   return `<tr class="r" data-cat="${r.category}" data-id="${r.id}">
-    <td class="name"><div class="nm">${img}<span class="title ${fare}">${esc(r.name)}</span></div></td>
+    <td class="name"><div class="nm">${img}<span class="title ${fare}">${esc(r.name)}</span>${r.intermediate?'<span class="interm">prep step</span>':''}</div></td>
     <td><div class="instr">${r.instr||''}</div>${meta}</td>
     <td class="eff">${effHTML(r.effect)}</td>
   </tr>`;
